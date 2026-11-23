@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.wkcw.scanify.history.ScanHistory
+import com.wkcw.scanify.history.ScanRecord
 import com.wkcw.scanify.scanner.DocumentScanner
 import com.wkcw.scanify.scanner.PdfExporter
 import com.wkcw.scanify.scanner.ScanFilter
@@ -17,10 +19,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { CAMERA, CROP, RESULT }
+enum class Screen { HOME, CAMERA, CROP, RESULT }
 
 class ScanViewModel : ViewModel() {
-    var screen by mutableStateOf(Screen.CAMERA); private set
+    var screen by mutableStateOf(Screen.HOME); private set
     var busy by mutableStateOf(false); private set
 
     var captured by mutableStateOf<Bitmap?>(null); private set
@@ -28,8 +30,28 @@ class ScanViewModel : ViewModel() {
     var preview by mutableStateOf<Bitmap?>(null); private set
     var filter by mutableStateOf(ScanFilter.BW); private set
 
+    val history = mutableStateListOf<ScanRecord>()
+
     private var warped: Bitmap? = null
     val pages = mutableStateListOf<Bitmap>()
+
+    fun refreshHistory(context: Context) {
+        history.clear()
+        history.addAll(ScanHistory.load(context))
+    }
+
+    fun newScan() {
+        screen = Screen.CAMERA
+    }
+
+    fun goHome() {
+        screen = Screen.HOME
+    }
+
+    fun deleteScan(context: Context, record: ScanRecord) {
+        ScanHistory.remove(context, record)
+        refreshHistory(context)
+    }
 
     fun onCaptured(bmp: Bitmap) = viewModelScope.launch {
         busy = true
@@ -64,17 +86,27 @@ class ScanViewModel : ViewModel() {
     fun savePdf(context: Context, onDone: (Uri) -> Unit) = viewModelScope.launch {
         busy = true
         preview?.let { pages.add(it) }
-        val uri = withContext(Dispatchers.IO) { PdfExporter.export(context, pages.toList()) }
+        val allPages = pages.toList()
+        val name = PdfExporter.newName()
+        val uri = withContext(Dispatchers.IO) { PdfExporter.export(context, allPages, name) }
+        val id = uri.lastPathSegment?.toLongOrNull() ?: System.currentTimeMillis()
+        val thumb = withContext(Dispatchers.IO) { ScanHistory.saveThumbnail(context, id, allPages.first()) }
+        ScanHistory.add(
+            context,
+            ScanRecord(id, name, System.currentTimeMillis(), allPages.size, uri.toString(), thumb),
+        )
+        refreshHistory(context)
         pages.clear()
         busy = false
-        screen = Screen.CAMERA
+        screen = Screen.HOME
         onDone(uri)
     }
 
     fun back() {
         screen = when (screen) {
             Screen.RESULT -> Screen.CROP
-            else -> Screen.CAMERA
+            Screen.CROP -> Screen.CAMERA
+            else -> Screen.HOME
         }
     }
 }

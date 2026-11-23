@@ -15,8 +15,12 @@ import java.util.Locale
 
 object PdfExporter {
 
+    /** Build the display name used for both the PDF and the history entry. */
+    fun newName(): String =
+        "Scan_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+
     /** Save all pages to Downloads/Scanify/ and return the Uri. */
-    fun export(context: Context, pages: List<Bitmap>): Uri {
+    fun export(context: Context, pages: List<Bitmap>, name: String = newName()): Uri {
         val doc = PdfDocument()
         val paint = Paint(Paint.FILTER_BITMAP_FLAG)
         val pageW = 595 // A4 @72dpi
@@ -29,16 +33,15 @@ object PdfExporter {
             doc.finishPage(page)
         }
 
-        val name = "Scan_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date()) + ".pdf"
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.DISPLAY_NAME, "$name.pdf")
             put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
             put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Scanify")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val resolver = context.contentResolver
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: error("Gagal bikin file PDF")
+            ?: error("Failed to create the PDF file")
         resolver.openOutputStream(uri)!!.use { doc.writeTo(it) }
         doc.close()
 

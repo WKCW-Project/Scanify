@@ -1,6 +1,5 @@
 package com.wkcw.scanify.ui
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -16,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
@@ -91,17 +90,11 @@ fun ResultScreen(vm: ScanViewModel) {
                 Text("Add page", Modifier.padding(start = 4.dp))
             }
             Button(onClick = {
-                vm.savePdf(context) { uri ->
+                vm.savePdf(context) {
                     Toast.makeText(context, "Saved to Downloads/Scanify", Toast.LENGTH_LONG).show()
-                    val share = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(share, "Share PDF"))
                 }
             }, Modifier.weight(1f)) {
-                Icon(Icons.Filled.Share, contentDescription = null)
+                Icon(Icons.Filled.Check, contentDescription = null)
                 Text("Save PDF", Modifier.padding(start = 4.dp))
             }
         }

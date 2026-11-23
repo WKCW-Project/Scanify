@@ -1,5 +1,7 @@
 package com.wkcw.scanify
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -21,13 +23,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.wkcw.scanify.history.ScanRecord
 import com.wkcw.scanify.ui.CameraScreen
 import com.wkcw.scanify.ui.CropScreen
+import com.wkcw.scanify.ui.HomeScreen
 import com.wkcw.scanify.ui.ResultScreen
 import com.wkcw.scanify.ui.theme.ScanifyTheme
 import org.opencv.android.OpenCVLoader
@@ -70,9 +76,13 @@ private fun OpenCvError() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(vm: ScanViewModel = viewModel()) {
-    BackHandler(vm.screen != Screen.CAMERA) { vm.back() }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { vm.refreshHistory(context) }
+
+    BackHandler(vm.screen != Screen.HOME) { vm.back() }
 
     val title = when (vm.screen) {
+        Screen.HOME -> "Scanify"
         Screen.CAMERA -> "Scanify"
         Screen.CROP -> "Crop document"
         Screen.RESULT -> "Preview"
@@ -83,7 +93,7 @@ fun App(vm: ScanViewModel = viewModel()) {
             TopAppBar(
                 title = { Text(title, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
-                    if (vm.screen != Screen.CAMERA) {
+                    if (vm.screen != Screen.HOME) {
                         IconButton(onClick = vm::back) {
                             Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                         }
@@ -99,6 +109,12 @@ fun App(vm: ScanViewModel = viewModel()) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (vm.screen) {
+                Screen.HOME -> HomeScreen(
+                    history = vm.history,
+                    onNewScan = vm::newScan,
+                    onOpen = { openPdf(context, it) },
+                    onDelete = { vm.deleteScan(context, it) },
+                )
                 Screen.CAMERA -> CameraScreen(pageCount = vm.pages.size, onCaptured = vm::onCaptured)
                 Screen.CROP -> CropScreen(vm.captured!!, vm.corners, onConfirm = vm::confirmCrop, onRetake = vm::back)
                 Screen.RESULT -> ResultScreen(vm)
@@ -120,4 +136,12 @@ fun App(vm: ScanViewModel = viewModel()) {
             }
         }
     }
+}
+
+private fun openPdf(context: android.content.Context, record: ScanRecord) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(record.uri)).apply {
+        type = "application/pdf"
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Open PDF"))
 }
