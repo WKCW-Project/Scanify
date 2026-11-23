@@ -48,11 +48,11 @@ class ScanViewModel : ViewModel() {
         screen = Screen.CAMERA
     }
 
-    fun setAutoDetect(value: Boolean) {
+    fun updateAutoDetect(value: Boolean) {
         autoDetect = value
     }
 
-    fun setAutoCapture(value: Boolean) {
+    fun updateAutoCapture(value: Boolean) {
         autoCapture = value
     }
 
