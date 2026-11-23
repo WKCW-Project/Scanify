@@ -20,10 +20,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +30,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -42,6 +45,8 @@ import com.wkcw.scanify.history.ScanRecord
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private val filters = listOf("All", "Today", "This week")
+
 @Composable
 fun HomeScreen(
     history: List<ScanRecord>,
@@ -49,70 +54,61 @@ fun HomeScreen(
     onOpen: (ScanRecord) -> Unit,
     onDelete: (ScanRecord) -> Unit,
 ) {
+    var selectedFilter by remember { mutableIntStateOf(0) }
+    val visible = remember(history, selectedFilter) {
+        val now = System.currentTimeMillis()
+        when (selectedFilter) {
+            1 -> history.filter { now - it.timestamp < 24 * 60 * 60 * 1000L }
+            2 -> history.filter { now - it.timestamp < 7 * 24 * 60 * 60 * 1000L }
+            else -> history
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         bottomBar = {
+            // Reserved for the bottom bar design; intentionally empty for now.
             Surface(
-                Modifier.navigationBarsPadding(),
+                Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 3.dp,
-            ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Home, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Home", style = MaterialTheme.typography.labelLarge)
-                    }
-                    FloatingActionButton(
-                        onClick = onNewScan,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "New scan")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("History", style = MaterialTheme.typography.labelLarge)
-                        Spacer(Modifier.width(8.dp))
-                        Icon(Icons.Filled.List, contentDescription = null)
-                    }
-                }
-            }
+            ) {}
         },
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Surface(
-                    Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Column(Modifier.padding(24.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            "Scan documents",
+                            "My scans",
                             style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            "Capture a page, crop it, and save it as PDF.",
+                            "Capture, crop, and save documents.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.height(20.dp))
-                        Button(onClick = onNewScan) {
-                            Icon(Icons.Filled.Add, contentDescription = null)
-                            Text("New scan", Modifier.padding(start = 6.dp))
-                        }
+                    }
+                    FilledTonalButton(onClick = onNewScan) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text("New scan", Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    filters.forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = selectedFilter == index,
+                            onClick = { selectedFilter = index },
+                            label = { Text(label) },
+                        )
                     }
                 }
             }
@@ -124,9 +120,9 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    if (history.isNotEmpty()) {
+                    if (visible.isNotEmpty()) {
                         Text(
-                            "${history.size}",
+                            "${visible.size}",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -134,7 +130,7 @@ fun HomeScreen(
                 }
             }
 
-            if (history.isEmpty()) {
+            if (visible.isEmpty()) {
                 item {
                     Surface(
                         Modifier.fillMaxWidth(),
@@ -163,7 +159,7 @@ fun HomeScreen(
                     }
                 }
             } else {
-                items(history, key = { it.id }) { record ->
+                items(visible, key = { it.id }) { record ->
                     ScanHistoryCard(record, onOpen, onDelete)
                 }
             }
