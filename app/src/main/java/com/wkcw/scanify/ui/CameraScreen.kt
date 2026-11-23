@@ -13,13 +13,33 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.LargeFloatingActionButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -39,16 +59,43 @@ fun CameraScreen(pageCount: Int, onCaptured: (Bitmap) -> Unit) {
     LaunchedEffect(Unit) { if (!granted) launcher.launch(Manifest.permission.CAMERA) }
 
     if (!granted) {
-        Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
-            Text("Izin kamera dibutuhkan buat scan dokumen")
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("Beri izin") }
+        Box(Modifier.fillMaxSize(), Alignment.Center) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                tonalElevation = 2.dp,
+                modifier = Modifier.padding(24.dp),
+            ) {
+                Column(
+                    Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "Camera access needed",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Grant camera permission to scan documents.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) {
+                        Text("Grant access")
+                    }
+                }
+            }
         }
         return
     }
 
     val lifecycleOwner = context as LifecycleOwner
-    val imageCapture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
+    val imageCapture = remember {
+        ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build()
+    }
     val previewView = remember { PreviewView(context) }
 
     DisposableEffect(Unit) {
@@ -65,31 +112,60 @@ fun CameraScreen(pageCount: Int, onCaptured: (Bitmap) -> Unit) {
     Box(Modifier.fillMaxSize()) {
         AndroidView({ previewView }, Modifier.fillMaxSize())
 
+        Surface(
+            Modifier.align(Alignment.TopStart).padding(16.dp),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Text(
+                if (pageCount == 0) "No pages yet" else "$pageCount page(s) captured",
+                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+
         Column(
             Modifier.align(Alignment.BottomCenter).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            if (pageCount > 0) Text("$pageCount halaman tersimpan", color = androidx.compose.ui.graphics.Color.White)
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = {
-                imageCapture.takePicture(
-                    ContextCompat.getMainExecutor(context),
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: ImageProxy) {
-                            val bmp = image.toBitmap()
-                            val rotation = image.imageInfo.rotationDegrees
-                            image.close()
-                            onCaptured(prepare(bmp, rotation))
-                        }
-                        override fun onError(e: ImageCaptureException) { e.printStackTrace() }
-                    }
-                )
-            }) { Text("Ambil foto") }
+            Text(
+                "Tap to capture a page",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+            )
+            Spacer(Modifier.height(12.dp))
+            BadgedBox(badge = { if (pageCount > 0) Badge { Text("$pageCount") } }) {
+                LargeFloatingActionButton(
+                    onClick = {
+                        imageCapture.takePicture(
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    val bmp = image.toBitmap()
+                                    val rotation = image.imageInfo.rotationDegrees
+                                    image.close()
+                                    onCaptured(prepare(bmp, rotation))
+                                }
+
+                                override fun onError(e: ImageCaptureException) {
+                                    e.printStackTrace()
+                                }
+                            },
+                        )
+                    },
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Text("SCAN", style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
     }
 }
 
-/** Putar sesuai orientasi sensor & kecilin kalau kegedean (hemat memori). */
+/** Rotate according to the sensor orientation and downscale to keep memory usage low. */
 private fun prepare(src: Bitmap, rotation: Int, maxSide: Int = 2400): Bitmap {
     val scale = maxSide.toFloat() / max(src.width, src.height)
     val m = Matrix().apply {

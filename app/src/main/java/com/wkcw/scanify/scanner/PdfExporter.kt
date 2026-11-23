@@ -15,7 +15,7 @@ import java.util.Locale
 
 object PdfExporter {
 
-    /** Simpan semua halaman ke Downloads/Scanify/ dan balikin Uri-nya. */
+    /** Save all pages to Downloads/Scanify/ and return the Uri. */
     fun export(context: Context, pages: List<Bitmap>): Uri {
         val doc = PdfDocument()
         val paint = Paint(Paint.FILTER_BITMAP_FLAG)

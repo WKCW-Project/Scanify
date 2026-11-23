@@ -43,9 +43,11 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
 
+    // Material3 1.5 requires AGP 9.1 and compileSdk 37; keep the BOM in sync with AGP 8.5.2.
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-core")
 
     val camerax = "1.3.4"
     implementation("androidx.camera:camera-core:$camerax")

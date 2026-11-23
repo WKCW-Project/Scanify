@@ -55,7 +55,7 @@ class ScanViewModel : ViewModel() {
         busy = false
     }
 
-    /** Simpan halaman ini, balik ke kamera buat scan halaman berikutnya. */
+    /** Save this page and return to the camera for the next one. */
     fun addPage() {
         preview?.let { pages.add(it) }
         screen = Screen.CAMERA
