@@ -143,41 +143,41 @@ fun CameraScreen(
                 analysis.setAnalyzer(analysisExecutor) { image ->
                     try {
                         val now = System.currentTimeMillis()
-                        if (!ready.get() || now - lastCheck.get() < 600) return@setAnalyzer
-                        lastCheck.set(now)
+                        if (ready.get() && now - lastCheck.get() >= 600) {
+                            lastCheck.set(now)
+                            val frame = image.toBitmap()
+                            val found = DocumentScanner.findDocument(frame)
+                            val normalized = found?.map {
+                                PointF(it.x / frame.width, it.y / frame.height)
+                            }
+                            if (normalized == null) {
+                                stableHits.set(0)
+                                previousCorners.set(null)
+                            } else {
+                                val stable = previousCorners.get()?.zip(normalized)
+                                    ?.all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < 0.03f } == true
+                                stableHits.set(if (stable) stableHits.get() + 1 else 1)
+                                previousCorners.set(normalized)
 
-                        val frame = image.toBitmap()
-                        val found = DocumentScanner.findDocument(frame)
-                        val normalized = found?.map {
-                            PointF(it.x / frame.width, it.y / frame.height)
-                        }
-                        if (normalized == null) {
-                            stableHits.set(0)
-                            previousCorners.set(null)
-                        } else {
-                            val stable = previousCorners.get()?.zip(normalized)
-                                ?.all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < 0.03f } == true
-                            stableHits.set(if (stable) stableHits.get() + 1 else 1)
-                            previousCorners.set(normalized)
+                                if (stableHits.get() >= 3 && ready.compareAndSet(true, false)) {
+                                    mainExecutor.execute {
+                                        imageCapture.takePicture(
+                                            mainExecutor,
+                                            object : ImageCapture.OnImageCapturedCallback() {
+                                                override fun onCaptureSuccess(capturedImage: ImageProxy) {
+                                                    val bmp = capturedImage.toBitmap()
+                                                    val rotation = capturedImage.imageInfo.rotationDegrees
+                                                    capturedImage.close()
+                                                    onCaptured(prepare(bmp, rotation))
+                                                }
 
-                            if (stableHits.get() >= 3 && ready.compareAndSet(true, false)) {
-                                mainExecutor.execute {
-                                    imageCapture.takePicture(
-                                        mainExecutor,
-                                        object : ImageCapture.OnImageCapturedCallback() {
-                                            override fun onCaptureSuccess(capturedImage: ImageProxy) {
-                                                val bmp = capturedImage.toBitmap()
-                                                val rotation = capturedImage.imageInfo.rotationDegrees
-                                                capturedImage.close()
-                                                onCaptured(prepare(bmp, rotation))
-                                            }
-
-                                            override fun onError(e: ImageCaptureException) {
-                                                ready.set(true)
-                                                e.printStackTrace()
-                                            }
-                                        },
-                                    )
+                                                override fun onError(e: ImageCaptureException) {
+                                                    ready.set(true)
+                                                    e.printStackTrace()
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
