@@ -39,7 +39,8 @@ object ScanHistory {
 
     fun remove(context: Context, record: ScanRecord) {
         val remaining = load(context).filterNot { it.id == record.id }
-        File(context.filesDir, FILE_NAME).writeLines(remaining.map(::serialize))
+        val text = buildString { remaining.forEach { append(serialize(it)).append('\n') } }
+        File(context.filesDir, FILE_NAME).writeText(text)
         File(record.thumbnail).delete()
         runCatching { context.contentResolver.delete(Uri.parse(record.uri), null, null) }
     }
