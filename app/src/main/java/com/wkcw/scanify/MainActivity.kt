@@ -118,7 +118,9 @@ fun App(vm: ScanViewModel = viewModel()) {
                 Screen.CAMERA -> CameraScreen(
                     pageCount = vm.pages.size,
                     autoDetect = vm.autoDetect,
+                    autoCapture = vm.autoCapture,
                     onAutoDetectChange = vm::setAutoDetect,
+                    onAutoCaptureChange = vm::setAutoCapture,
                     onCaptured = vm::onCaptured,
                 )
                 Screen.CROP -> CropScreen(vm.captured!!, vm.corners, onConfirm = vm::confirmCrop, onRetake = vm::back)

@@ -4,13 +4,16 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.graphics.PointF
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Arrangement
@@ -47,13 +50,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.wkcw.scanify.scanner.DocumentScanner
+import kotlin.math.hypot
 import kotlin.math.max
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 @Composable
 fun CameraScreen(
     pageCount: Int,
     autoDetect: Boolean,
+    autoCapture: Boolean,
     onAutoDetectChange: (Boolean) -> Unit,
+    onAutoCaptureChange: (Boolean) -> Unit,
     onCaptured: (Bitmap) -> Unit,
 ) {
     val context = LocalContext.current
@@ -106,14 +118,83 @@ fun CameraScreen(
     }
     val previewView = remember { PreviewView(context) }
 
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) {
+        onDispose { analysisExecutor.shutdown() }
+    }
+
+    DisposableEffect(autoCapture) {
+        val mainExecutor = ContextCompat.getMainExecutor(context)
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             val provider = future.get()
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+            val useCases = mutableListOf<UseCase>(preview, imageCapture)
+
+            if (autoCapture) {
+                val analysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                val lastCheck = AtomicLong(0L)
+                val stableHits = AtomicInteger(0)
+                val previousCorners = AtomicReference<List<PointF>?>(null)
+                val ready = AtomicBoolean(true)
+
+                analysis.setAnalyzer(analysisExecutor) { image ->
+                    try {
+                        val now = System.currentTimeMillis()
+                        if (!ready.get() || now - lastCheck.get() < 600) return@setAnalyzer
+                        lastCheck.set(now)
+
+                        val frame = image.toBitmap()
+                        val found = DocumentScanner.findDocument(frame)
+                        val normalized = found?.map {
+                            PointF(it.x / frame.width, it.y / frame.height)
+                        }
+                        if (normalized == null) {
+                            stableHits.set(0)
+                            previousCorners.set(null)
+                        } else {
+                            val stable = previousCorners.get()?.zip(normalized)
+                                ?.all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < 0.03f } == true
+                            stableHits.set(if (stable) stableHits.get() + 1 else 1)
+                            previousCorners.set(normalized)
+
+                            if (stableHits.get() >= 3 && ready.compareAndSet(true, false)) {
+                                mainExecutor.execute {
+                                    imageCapture.takePicture(
+                                        mainExecutor,
+                                        object : ImageCapture.OnImageCapturedCallback() {
+                                            override fun onCaptureSuccess(capturedImage: ImageProxy) {
+                                                val bmp = capturedImage.toBitmap()
+                                                val rotation = capturedImage.imageInfo.rotationDegrees
+                                                capturedImage.close()
+                                                onCaptured(prepare(bmp, rotation))
+                                            }
+
+                                            override fun onError(e: ImageCaptureException) {
+                                                ready.set(true)
+                                                e.printStackTrace()
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    } finally {
+                        image.close()
+                    }
+                }
+                useCases.add(analysis)
+            }
+
             provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
-        }, ContextCompat.getMainExecutor(context))
+            provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                *useCases.toTypedArray(),
+            )
+        }, mainExecutor)
         onDispose { future.get().unbindAll() }
     }
 
@@ -137,13 +218,18 @@ fun CameraScreen(
             shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Auto detect", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.width(8.dp))
-                Switch(checked = autoDetect, onCheckedChange = onAutoDetectChange)
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Auto detect", style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.width(8.dp))
+                    Switch(checked = autoDetect, onCheckedChange = onAutoDetectChange)
+                }
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Auto capture", style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.width(8.dp))
+                    Switch(checked = autoCapture, onCheckedChange = onAutoCaptureChange)
+                }
             }
         }
 
@@ -153,7 +239,11 @@ fun CameraScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                if (autoDetect) "Auto crop is on — tap to capture" else "Tap to capture a page",
+                when {
+                    autoCapture -> "Auto capture is on — hold the document steady"
+                    autoDetect -> "Auto crop is on — tap to capture"
+                    else -> "Tap to capture a page"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
             )

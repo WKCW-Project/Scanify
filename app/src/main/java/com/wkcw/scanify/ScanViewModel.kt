@@ -25,6 +25,7 @@ class ScanViewModel : ViewModel() {
     var screen by mutableStateOf(Screen.HOME); private set
     var busy by mutableStateOf(false); private set
     var autoDetect by mutableStateOf(true); private set
+    var autoCapture by mutableStateOf(true); private set
 
     var captured by mutableStateOf<Bitmap?>(null); private set
     var corners by mutableStateOf<List<PointF>>(emptyList()); private set
@@ -47,6 +48,10 @@ class ScanViewModel : ViewModel() {
 
     fun setAutoDetect(value: Boolean) {
         autoDetect = value
+    }
+
+    fun setAutoCapture(value: Boolean) {
+        autoCapture = value
     }
 
     fun goHome() {
