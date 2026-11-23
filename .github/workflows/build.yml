@@ -38,7 +38,59 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      # Kalau push tag (mis. v1.0.0), APK otomatis dilampirkan ke GitHub Release
+      # Send the APK + build info to Telegram (skipped on PRs because secrets are unavailable to forks)
+      - name: Send APK to Telegram
+        if: github.event_name != 'pull_request'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$TELEGRAM_BOT_TOKEN" || -z "$TELEGRAM_CHAT_ID" ]]; then
+            echo "::error::Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID under Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+
+          apk_path=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name 'app-debug.apk' -print -quit)
+          if [[ -z "$apk_path" ]]; then
+            echo "::error::No APK found in app/build/outputs/apk/debug"
+            exit 1
+          fi
+
+          # Leave headroom for multipart overhead; the Bot API limit is 50 MB per file.
+          max_bytes=$((48 * 1024 * 1024))
+          if (( $(stat -c%s "$apk_path") > max_bytes )); then
+            echo "::error::${apk_path} exceeds 48 MB; cannot attach it to Telegram"
+            exit 1
+          fi
+
+          commit_msg=$(git log -1 --pretty=%s)
+          commit_msg="${commit_msg:0:200}"
+          caption=$(cat <<EOF
+          New CI from ${GITHUB_REPOSITORY}
+
+          Commit message:
+          ${commit_msg}
+          EOF
+          )
+
+          response_file=$(mktemp)
+          http_code=$(curl --silent --show-error --retry 3 \
+            --output "$response_file" --write-out '%{http_code}' \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            -F "document=@${apk_path}" \
+            -F "caption=${caption}")
+
+          if [[ "$http_code" != 2* ]] || ! jq -e '.ok == true' "$response_file" > /dev/null; then
+            echo "::error::Failed to send APK to Telegram (HTTP ${http_code})"
+            cat "$response_file"
+            exit 1
+          fi
+          echo "APK sent to Telegram."
+
+      # On a v* tag push (for example v1.0.0), attach the APK to the GitHub Release
       - name: Create release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

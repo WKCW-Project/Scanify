@@ -14,8 +14,15 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        // OpenCV bawa native lib per ABI; batasi biar APK nggak bengkak
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        // OpenCV ships native libs per ABI; arm64 only keeps the APK small.
+        ndk { abiFilters += listOf("arm64-v8a") }
+    }
+
+    // Compress native libs to keep the APK well under Telegram's upload limit.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     buildTypes {
