@@ -12,7 +12,8 @@ android {
         applicationId = "com.wkcw.scanify"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
+        // Each CI run gets a higher versionCode so an install can update in place.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0"
         // OpenCV ships native libs per ABI; arm64 only keeps the APK small.
         ndk { abiFilters += listOf("arm64-v8a") }
@@ -25,9 +26,26 @@ android {
         }
     }
 
+    // CI supplies a dedicated keystore so every build keeps the same signature.
+    val signingKeystore = System.getenv("SCANIFY_KEYSTORE_FILE")?.let(::file)
+    signingConfigs {
+        if (signingKeystore != null) {
+            create("ci") {
+                storeFile = signingKeystore
+                storePassword = System.getenv("SCANIFY_STORE_PASSWORD")
+                keyAlias = System.getenv("SCANIFY_KEY_ALIAS")
+                keyPassword = System.getenv("SCANIFY_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (signingKeystore != null) signingConfig = signingConfigs.getByName("ci")
+        }
         release {
             isMinifyEnabled = false
+            if (signingKeystore != null) signingConfig = signingConfigs.getByName("ci")
         }
     }
     compileOptions {
