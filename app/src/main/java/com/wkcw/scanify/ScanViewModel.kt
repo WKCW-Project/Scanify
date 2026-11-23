@@ -24,6 +24,7 @@ enum class Screen { HOME, CAMERA, CROP, RESULT }
 class ScanViewModel : ViewModel() {
     var screen by mutableStateOf(Screen.HOME); private set
     var busy by mutableStateOf(false); private set
+    var autoDetect by mutableStateOf(true); private set
 
     var captured by mutableStateOf<Bitmap?>(null); private set
     var corners by mutableStateOf<List<PointF>>(emptyList()); private set
@@ -44,6 +45,10 @@ class ScanViewModel : ViewModel() {
         screen = Screen.CAMERA
     }
 
+    fun setAutoDetect(value: Boolean) {
+        autoDetect = value
+    }
+
     fun goHome() {
         screen = Screen.HOME
     }
@@ -55,9 +60,16 @@ class ScanViewModel : ViewModel() {
 
     fun onCaptured(bmp: Bitmap) = viewModelScope.launch {
         busy = true
-        corners = withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
+        val detected = withContext(Dispatchers.Default) { DocumentScanner.findDocument(bmp) }
         captured = bmp
-        screen = Screen.CROP
+        corners = detected ?: withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
+        if (autoDetect && detected != null) {
+            warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, detected) }
+            preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(warped!!, filter) }
+            screen = Screen.RESULT
+        } else {
+            screen = Screen.CROP
+        }
         busy = false
     }
 

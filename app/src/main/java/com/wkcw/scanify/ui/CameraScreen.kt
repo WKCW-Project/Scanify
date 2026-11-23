@@ -16,10 +16,12 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -27,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.LargeFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,7 +50,12 @@ import androidx.lifecycle.LifecycleOwner
 import kotlin.math.max
 
 @Composable
-fun CameraScreen(pageCount: Int, onCaptured: (Bitmap) -> Unit) {
+fun CameraScreen(
+    pageCount: Int,
+    autoDetect: Boolean,
+    onAutoDetectChange: (Boolean) -> Unit,
+    onCaptured: (Bitmap) -> Unit,
+) {
     val context = LocalContext.current
     var granted by remember {
         mutableStateOf(
@@ -124,13 +132,28 @@ fun CameraScreen(pageCount: Int, onCaptured: (Bitmap) -> Unit) {
             )
         }
 
+        Surface(
+            Modifier.align(Alignment.TopEnd).padding(16.dp),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Auto detect", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.width(8.dp))
+                Switch(checked = autoDetect, onCheckedChange = onAutoDetectChange)
+            }
+        }
+
         Column(
             Modifier.align(Alignment.BottomCenter).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                "Tap to capture a page",
+                if (autoDetect) "Auto crop is on — tap to capture" else "Tap to capture a page",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
             )

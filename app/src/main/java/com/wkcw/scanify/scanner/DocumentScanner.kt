@@ -14,12 +14,12 @@ enum class ScanFilter(val label: String) {
 
 object DocumentScanner {
 
-    /** Deteksi 4 sudut dokumen. Hasil urutan: kiri-atas, kanan-atas, kanan-bawah, kiri-bawah (koordinat bitmap asli). */
-    fun detectCorners(bmp: Bitmap): List<PointF> {
+    /** Returns the four document corners, or null when no convincing document is found. */
+    fun findDocument(bmp: Bitmap): List<PointF>? {
         val src = Mat()
         Utils.bitmapToMat(bmp, src)
 
-        // Kecilin dulu biar cepat & noise berkurang
+        // Downscale first: faster and less noisy.
         val targetH = 500.0
         val ratio = src.rows() / targetH
         val small = Mat()
@@ -31,7 +31,7 @@ object DocumentScanner {
 
         val edges = Mat()
         Imgproc.Canny(gray, edges, 75.0, 200.0)
-        // Tutup celah kecil di garis tepi
+        // Close small gaps in the document outline.
         val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
         Imgproc.dilate(edges, edges, kernel)
 
@@ -55,18 +55,21 @@ object DocumentScanner {
 
         listOf(src, small, gray, edges, kernel).forEach { it.release() }
 
-        val w = bmp.width.toFloat()
-        val h = bmp.height.toFloat()
-        // Fallback: kalau nggak ketemu, pakai bingkai hampir penuh
-        val pts = found?.map { PointF((it.x * ratio).toFloat(), (it.y * ratio).toFloat()) }
-            ?: listOf(
-                PointF(w * 0.08f, h * 0.08f), PointF(w * 0.92f, h * 0.08f),
-                PointF(w * 0.92f, h * 0.92f), PointF(w * 0.08f, h * 0.92f)
-            )
-        return orderPoints(pts)
+        return found?.map { PointF((it.x * ratio).toFloat(), (it.y * ratio).toFloat()) }
+            ?.let(::orderPoints)
     }
 
-    /** Urutkan: TL (x+y min), BR (x+y max), TR (y-x min), BL (y-x max). */
+    /** Fallback frame used by the manual crop screen when detection fails. */
+    fun detectCorners(bmp: Bitmap): List<PointF> = findDocument(bmp) ?: run {
+        val w = bmp.width.toFloat()
+        val h = bmp.height.toFloat()
+        listOf(
+            PointF(w * 0.08f, h * 0.08f), PointF(w * 0.92f, h * 0.08f),
+            PointF(w * 0.92f, h * 0.92f), PointF(w * 0.08f, h * 0.92f)
+        )
+    }
+
+    /** Order: TL (min x+y), BR (max x+y), TR (min y-x), BL (max y-x). */
     fun orderPoints(p: List<PointF>): List<PointF> {
         val tl = p.minBy { it.x + it.y }
         val br = p.maxBy { it.x + it.y }
@@ -75,7 +78,7 @@ object DocumentScanner {
         return listOf(tl, tr, br, bl)
     }
 
-    /** Luruskan perspektif berdasarkan 4 sudut. */
+    /** Flatten the perspective using the four corners. */
     fun warp(bmp: Bitmap, corners: List<PointF>): Bitmap {
         val (tl, tr, br, bl) = orderPoints(corners)
         val width = max(hypot(br.x - bl.x, br.y - bl.y), hypot(tr.x - tl.x, tr.y - tl.y)).toDouble()
@@ -111,7 +114,7 @@ object DocumentScanner {
 
         val result = Mat()
         when (filter) {
-            ScanFilter.GRAYSCALE -> gray.convertTo(result, -1, 1.2, 10.0) // sedikit tambah kontras
+            ScanFilter.GRAYSCALE -> gray.convertTo(result, -1, 1.2, 10.0) // slight contrast boost
             ScanFilter.BW -> Imgproc.adaptiveThreshold(
                 gray, result, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
                 Imgproc.THRESH_BINARY, 31, 12.0

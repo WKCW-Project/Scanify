@@ -115,7 +115,12 @@ fun App(vm: ScanViewModel = viewModel()) {
                     onOpen = { openPdf(context, it) },
                     onDelete = { vm.deleteScan(context, it) },
                 )
-                Screen.CAMERA -> CameraScreen(pageCount = vm.pages.size, onCaptured = vm::onCaptured)
+                Screen.CAMERA -> CameraScreen(
+                    pageCount = vm.pages.size,
+                    autoDetect = vm.autoDetect,
+                    onAutoDetectChange = vm::setAutoDetect,
+                    onCaptured = vm::onCaptured,
+                )
                 Screen.CROP -> CropScreen(vm.captured!!, vm.corners, onConfirm = vm::confirmCrop, onRetake = vm::back)
                 Screen.RESULT -> ResultScreen(vm)
             }
