@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,7 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,40 +64,37 @@ fun HomeScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-        bottomBar = {
-            // Reserved for the bottom bar design; intentionally empty for now.
-            Surface(
-                Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 3.dp,
-            ) {}
+        containerColor = MaterialTheme.colorScheme.surface,
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNewScan,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "New scan")
+            }
         },
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(
+                horizontal = 20.dp,
+                top = 16.dp,
+                bottom = 96.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "My scans",
-                            style = MaterialTheme.typography.headlineMedium,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Capture, crop, and save documents.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    FilledTonalButton(onClick = onNewScan) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
-                        Text("New scan", Modifier.padding(start = 6.dp))
-                    }
-                }
+                Text(
+                    "My scans",
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Capture, crop, and save documents.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             item {

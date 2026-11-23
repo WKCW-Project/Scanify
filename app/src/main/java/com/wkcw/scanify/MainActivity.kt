@@ -90,22 +90,22 @@ fun App(vm: ScanViewModel = viewModel()) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = {
-                    if (vm.screen != Screen.HOME) {
+            if (vm.screen != Screen.HOME) {
+                TopAppBar(
+                    title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                    navigationIcon = {
                         IconButton(onClick = vm::back) {
                             Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                )
+            }
         },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        containerColor = MaterialTheme.colorScheme.surface,
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (vm.screen) {
