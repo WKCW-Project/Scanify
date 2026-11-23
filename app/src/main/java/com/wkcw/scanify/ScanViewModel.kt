@@ -31,10 +31,12 @@ class ScanViewModel : ViewModel() {
     var corners by mutableStateOf<List<PointF>>(emptyList()); private set
     var preview by mutableStateOf<Bitmap?>(null); private set
     var filter by mutableStateOf(ScanFilter.BW); private set
+    var rotation by mutableStateOf(0); private set
 
     val history = mutableStateListOf<ScanRecord>()
 
-    private var warped: Bitmap? = null
+    private var baseWarp: Bitmap? = null
+    private var editedWarp: Bitmap? = null
     val pages = mutableStateListOf<Bitmap>()
 
     fun refreshHistory(context: Context) {
@@ -69,8 +71,8 @@ class ScanViewModel : ViewModel() {
         captured = bmp
         corners = detected ?: withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
         if (autoDetect && detected != null) {
-            warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, detected) }
-            preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(warped!!, filter) }
+            val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, detected) }
+            setWarped(warped)
             screen = Screen.RESULT
         } else {
             screen = Screen.CROP
@@ -81,16 +83,33 @@ class ScanViewModel : ViewModel() {
     fun confirmCrop(finalCorners: List<PointF>) = viewModelScope.launch {
         busy = true
         corners = finalCorners
-        warped = withContext(Dispatchers.Default) { DocumentScanner.warp(captured!!, finalCorners) }
-        preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(warped!!, filter) }
+        val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(captured!!, finalCorners) }
+        setWarped(warped)
         screen = Screen.RESULT
+        busy = false
+    }
+
+    private suspend fun setWarped(warped: Bitmap) {
+        baseWarp = warped
+        editedWarp = warped
+        rotation = 0
+        preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(warped, filter) }
+    }
+
+    fun rotate(degrees: Int) = viewModelScope.launch {
+        val base = baseWarp ?: return@launch
+        rotation = (rotation + degrees + 360) % 360
+        busy = true
+        editedWarp = withContext(Dispatchers.Default) { DocumentScanner.rotate(base, rotation) }
+        preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(editedWarp!!, filter) }
         busy = false
     }
 
     fun setFilter(f: ScanFilter) = viewModelScope.launch {
         filter = f
+        val source = editedWarp ?: return@launch
         busy = true
-        preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(warped!!, f) }
+        preview = withContext(Dispatchers.Default) { DocumentScanner.applyFilter(source, f) }
         busy = false
     }
 

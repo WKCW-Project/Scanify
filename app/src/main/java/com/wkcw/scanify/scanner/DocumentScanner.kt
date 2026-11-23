@@ -1,6 +1,7 @@
 package com.wkcw.scanify.scanner
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.PointF
 import org.opencv.android.Utils
 import org.opencv.core.*
@@ -9,7 +10,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 enum class ScanFilter(val label: String) {
-    ORIGINAL("Asli"), GRAYSCALE("Abu-abu"), BW("Hitam putih")
+    ORIGINAL("Original"), GRAYSCALE("Gray"), BW("B&W")
 }
 
 object DocumentScanner {
@@ -103,6 +104,13 @@ object DocumentScanner {
         Utils.matToBitmap(dst, out)
         listOf(src, m, dst, srcPts, dstPts).forEach { it.release() }
         return out
+    }
+
+    /** Rotate the bitmap by a multiple of 90 degrees. */
+    fun rotate(bmp: Bitmap, degrees: Int): Bitmap {
+        if (degrees % 360 == 0) return bmp
+        val matrix = Matrix().apply { postRotate(degrees.toFloat()) }
+        return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
     }
 
     fun applyFilter(bmp: Bitmap, filter: ScanFilter): Bitmap {
