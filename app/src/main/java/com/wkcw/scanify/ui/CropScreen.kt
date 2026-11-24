@@ -59,7 +59,7 @@ fun CropScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        Column(Modifier.padding(horizontal = 20.dp, top = 16.dp, bottom = 12.dp)) {
+        Column(Modifier.padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 12.dp)) {
             Text("Adjust crop", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(4.dp))
             Text(

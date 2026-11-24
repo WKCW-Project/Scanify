@@ -48,7 +48,7 @@ fun ResultScreen(vm: ScanViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        Column(Modifier.padding(horizontal = 20.dp, top = 16.dp, bottom = 12.dp)) {
+        Column(Modifier.padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 12.dp)) {
             Text(
                 if (vm.pages.isEmpty()) "Page ready" else "Page ${vm.pages.size + 1} ready",
                 style = MaterialTheme.typography.titleLarge,
