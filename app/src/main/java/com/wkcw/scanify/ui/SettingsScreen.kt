@@ -1,5 +1,6 @@
 package com.wkcw.scanify.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,11 +26,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.wkcw.scanify.R
 import com.wkcw.scanify.ScanViewModel
 
 @Composable
-fun SettingsScreen(vm: ScanViewModel) {
+fun SettingsScreen(vm: ScanViewModel, onAbout: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Scan settings", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(4.dp))
@@ -55,6 +58,48 @@ fun SettingsScreen(vm: ScanViewModel) {
             checked = vm.autoCapture,
             onCheckedChange = vm::updateAutoCapture,
         )
+
+        Spacer(Modifier.height(24.dp))
+        Text("About", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        Card(
+            onClick = onAbout,
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        ) {
+            Row(
+                Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    Modifier.size(44.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Image(
+                            painterResource(R.mipmap.ic_launcher),
+                            contentDescription = null,
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Scanify", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Version and app details",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 

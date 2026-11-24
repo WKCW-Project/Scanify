@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wkcw.scanify.history.ScanRecord
+import com.wkcw.scanify.ui.AboutScreen
 import com.wkcw.scanify.ui.CameraScreen
 import com.wkcw.scanify.ui.CropScreen
 import com.wkcw.scanify.ui.HomeScreen
@@ -88,6 +89,7 @@ fun App(vm: ScanViewModel = viewModel()) {
         Screen.CROP -> "Crop document"
         Screen.RESULT -> "Preview"
         Screen.SETTINGS -> "Settings"
+        Screen.ABOUT -> "About"
     }
 
     Scaffold(
@@ -127,7 +129,8 @@ fun App(vm: ScanViewModel = viewModel()) {
                 )
                 Screen.CROP -> CropScreen(vm.captured!!, vm.corners, onConfirm = vm::confirmCrop, onRetake = vm::back)
                 Screen.RESULT -> ResultScreen(vm)
-                Screen.SETTINGS -> SettingsScreen(vm)
+                Screen.SETTINGS -> SettingsScreen(vm, onAbout = vm::openAbout)
+                Screen.ABOUT -> AboutScreen()
             }
 
             if (vm.busy) {
