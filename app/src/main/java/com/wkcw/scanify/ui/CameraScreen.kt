@@ -17,18 +17,22 @@ import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
-import androidx.compose.material3.LargeFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,11 +45,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -127,6 +130,26 @@ fun CameraScreen(
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
     var scanGuide by remember { mutableStateOf<ScanGuide?>(null) }
+    val mainExecutor = ContextCompat.getMainExecutor(context)
+
+    fun takePicture(onError: () -> Unit = {}) {
+        imageCapture.takePicture(
+            mainExecutor,
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    val bmp = image.toBitmap()
+                    val rotation = image.imageInfo.rotationDegrees
+                    image.close()
+                    onCaptured(prepare(bmp, rotation))
+                }
+
+                override fun onError(e: ImageCaptureException) {
+                    onError()
+                    e.printStackTrace()
+                }
+            },
+        )
+    }
 
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) {
@@ -135,7 +158,6 @@ fun CameraScreen(
 
     val liveDetection = autoDetect || autoCapture
     DisposableEffect(liveDetection) {
-        val mainExecutor = ContextCompat.getMainExecutor(context)
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             val provider = future.get()
@@ -182,24 +204,7 @@ fun CameraScreen(
                                     scanGuide = ScanGuide(normalized, frame.width, frame.height, locked)
                                 }
                                 if (autoCapture && locked && captured.compareAndSet(false, true)) {
-                                    mainExecutor.execute {
-                                        imageCapture.takePicture(
-                                            mainExecutor,
-                                            object : ImageCapture.OnImageCapturedCallback() {
-                                                override fun onCaptureSuccess(capturedImage: ImageProxy) {
-                                                    val bmp = capturedImage.toBitmap()
-                                                    val rotation = capturedImage.imageInfo.rotationDegrees
-                                                    capturedImage.close()
-                                                    onCaptured(prepare(bmp, rotation))
-                                                }
-
-                                                override fun onError(e: ImageCaptureException) {
-                                                    captured.set(false)
-                                                    e.printStackTrace()
-                                                }
-                                            },
-                                        )
-                                    }
+                                    mainExecutor.execute { takePicture(onError = { captured.set(false) }) }
                                 }
                             }
                         }
@@ -224,15 +229,28 @@ fun CameraScreen(
         AndroidView({ previewView }, Modifier.fillMaxSize())
 
         Canvas(Modifier.fillMaxSize()) {
-            val insetX = size.width * 0.08f
-            val insetY = size.height * 0.12f
-            drawRoundRect(
-                color = Color.White.copy(alpha = 0.4f),
-                topLeft = Offset(insetX, insetY),
-                size = Size(size.width - insetX * 2, size.height - insetY * 2),
-                cornerRadius = CornerRadius(24f),
-                style = Stroke(width = 3f),
-            )
+            val left = size.width * 0.08f
+            val top = size.height * 0.14f
+            val right = size.width - left
+            val bottom = size.height - top
+            val scrim = Color.Black.copy(alpha = 0.42f)
+
+            // Dim everything outside the scan area.
+            drawRect(scrim, Offset(0f, 0f), Size(size.width, top))
+            drawRect(scrim, Offset(0f, bottom), Size(size.width, size.height - bottom))
+            drawRect(scrim, Offset(0f, top), Size(left, bottom - top))
+            drawRect(scrim, Offset(right, top), Size(size.width - right, bottom - top))
+
+            // Four scanner-style corner brackets.
+            fun bracket(x: Float, y: Float, dx: Float, dy: Float) {
+                val len = 34f
+                drawLine(Color.White, Offset(x, y), Offset(x + dx * len, y), strokeWidth = 6f)
+                drawLine(Color.White, Offset(x, y), Offset(x, y + dy * len), strokeWidth = 6f)
+            }
+            bracket(left, top, 1f, 1f)
+            bracket(right, top, -1f, 1f)
+            bracket(right, bottom, -1f, -1f)
+            bracket(left, bottom, 1f, -1f)
 
             val guide = scanGuide
             if (guide != null) {
@@ -242,68 +260,88 @@ fun CameraScreen(
                 val corners = guide.corners.map {
                     Offset(it.x * guide.frameWidth * scale + offX, it.y * guide.frameHeight * scale + offY)
                 }
-                val lineColor = if (guide.locked) Color.Green else Color.White
+                val lineColor = if (guide.locked) Color.Green else Color.White.copy(alpha = 0.75f)
                 for (i in corners.indices) {
                     drawLine(lineColor, corners[i], corners[(i + 1) % corners.size], strokeWidth = 6f)
                 }
                 corners.forEach {
-                    drawCircle(Color.White, 16f, it)
-                    drawCircle(lineColor, 10f, it)
+                    drawCircle(Color.White, 15f, it)
+                    drawCircle(lineColor, 9f, it)
                 }
             }
         }
 
-        Surface(
-            Modifier.align(Alignment.TopStart).padding(16.dp),
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ) {
-            Text(
-                if (pageCount == 0) "No pages yet" else "$pageCount page(s) captured",
-                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.labelLarge,
-            )
+        if (scanGuide?.locked == true) {
+            Surface(
+                Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Text(
+                    "Document detected",
+                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
         }
 
-        Column(
-            Modifier.align(Alignment.BottomCenter).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+        Surface(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 3.dp,
         ) {
-            Text(
-                when {
-                    autoCapture -> "Fit the document in the guide to capture"
-                    autoDetect -> "Auto crop is on — tap to capture"
-                    else -> "Tap to capture a page"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-            )
-            Spacer(Modifier.height(12.dp))
-            BadgedBox(badge = { if (pageCount > 0) Badge { Text("$pageCount") } }) {
-                LargeFloatingActionButton(
-                    onClick = {
-                        imageCapture.takePicture(
-                            ContextCompat.getMainExecutor(context),
-                            object : ImageCapture.OnImageCapturedCallback() {
-                                override fun onCaptureSuccess(image: ImageProxy) {
-                                    val bmp = image.toBitmap()
-                                    val rotation = image.imageInfo.rotationDegrees
-                                    image.close()
-                                    onCaptured(prepare(bmp, rotation))
-                                }
-
-                                override fun onError(e: ImageCaptureException) {
-                                    e.printStackTrace()
-                                }
-                            },
-                        )
-                    },
-                    shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            Column(
+                Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("SCAN", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        if (autoCapture) "AUTO" else "MANUAL",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        if (pageCount == 0) "0 pages" else "$pageCount page(s)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    when {
+                        autoCapture -> "Fit the document in the guide to capture"
+                        autoDetect -> "Auto crop is on — tap to capture"
+                        else -> "Tap to capture a page"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+
+                Spacer(Modifier.height(16.dp))
+                BadgedBox(badge = { if (pageCount > 0) Badge { Text("$pageCount") } }) {
+                    Box(
+                        Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { takePicture() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface),
+                        )
+                    }
                 }
             }
         }
