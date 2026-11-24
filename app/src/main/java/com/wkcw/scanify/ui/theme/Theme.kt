@@ -14,65 +14,77 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// A single, calm green palette shared by every screen (matches the launcher icon).
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF6750A4),
+    primary = Color(0xFF5F7A3A),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFEADDFF),
-    onPrimaryContainer = Color(0xFF21005D),
-    secondary = Color(0xFF006A6A),
+    primaryContainer = Color(0xFFE4EED6),
+    onPrimaryContainer = Color(0xFF1B2A0B),
+
+    secondary = Color(0xFF6A7A5E),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFA0F0EE),
-    onSecondaryContainer = Color(0xFF002020),
-    tertiary = Color(0xFF9C4146),
+    secondaryContainer = Color(0xFFE9EEE2),
+    onSecondaryContainer = Color(0xFF202A17),
+
+    tertiary = Color(0xFF7D8A72),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFD8DC),
-    onTertiaryContainer = Color(0xFF410007),
-    surface = Color(0xFFFFFBFE),
+    tertiaryContainer = Color(0xFFEDF1E7),
+    onTertiaryContainer = Color(0xFF262F1F),
+
+    surface = Color(0xFFFFFFFF),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F2FA),
-    surfaceContainer = Color(0xFFF3EDF7),
-    surfaceContainerHigh = Color(0xFFECE6F0),
-    surfaceContainerHighest = Color(0xFFE6E0E9),
+    surfaceContainerLow = Color(0xFFF8F9F5),
+    surfaceContainer = Color(0xFFF2F4EE),
+    surfaceContainerHigh = Color(0xFFE9EDE3),
+    surfaceContainerHighest = Color(0xFFE2E7DB),
+    onSurface = Color(0xFF1A1C17),
+    onSurfaceVariant = Color(0xFF5D6355),
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFD0BCFF),
-    onPrimary = Color(0xFF381E72),
-    primaryContainer = Color(0xFF4F378B),
-    onPrimaryContainer = Color(0xFFEADDFF),
-    secondary = Color(0xFF6AD7D3),
-    onSecondary = Color(0xFF003737),
-    secondaryContainer = Color(0xFF00504F),
-    onSecondaryContainer = Color(0xFFA0F0EE),
-    tertiary = Color(0xFFEFB8BC),
-    onTertiary = Color(0xFF4F2528),
-    tertiaryContainer = Color(0xFF69373B),
-    onTertiaryContainer = Color(0xFFFFD8DC),
-    surface = Color(0xFF141218),
-    surfaceContainerLowest = Color(0xFF0E0D12),
-    surfaceContainerLow = Color(0xFF1D1B20),
-    surfaceContainer = Color(0xFF211F26),
-    surfaceContainerHigh = Color(0xFF2B2930),
-    surfaceContainerHighest = Color(0xFF36343B),
+    primary = Color(0xFFB4D087),
+    onPrimary = Color(0xFF1F2C0E),
+    primaryContainer = Color(0xFF3E5223),
+    onPrimaryContainer = Color(0xFFDCEBC2),
+
+    secondary = Color(0xFFB8C4AC),
+    onSecondary = Color(0xFF222A1B),
+    secondaryContainer = Color(0xFF35402E),
+    onSecondaryContainer = Color(0xFFDCE4D5),
+
+    tertiary = Color(0xFFC3CCB9),
+    onTertiary = Color(0xFF262F20),
+    tertiaryContainer = Color(0xFF3B4538),
+    onTertiaryContainer = Color(0xFFE2E9DE),
+
+    surface = Color(0xFF12150F),
+    surfaceContainerLowest = Color(0xFF0C0E0A),
+    surfaceContainerLow = Color(0xFF1A1E16),
+    surfaceContainer = Color(0xFF21261D),
+    surfaceContainerHigh = Color(0xFF2B3125),
+    surfaceContainerHighest = Color(0xFF363D2F),
+    onSurface = Color(0xFFE4E8DE),
+    onSurfaceVariant = Color(0xFFB4BDAA),
 )
 
 private val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(10.dp),
-    small = RoundedCornerShape(16.dp),
-    medium = RoundedCornerShape(24.dp),
-    large = RoundedCornerShape(32.dp),
-    extraLarge = RoundedCornerShape(40.dp),
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(24.dp),
 )
 
 private val AppTypography = Typography(
-    displayLarge = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 57.sp),
-    headlineLarge = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 34.sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 28.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 22.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 17.sp),
+    displayLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 52.sp),
+    headlineLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 30.sp),
+    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
     bodyLarge = TextStyle(fontSize = 16.sp),
     bodyMedium = TextStyle(fontSize = 14.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 15.sp),
+    bodySmall = TextStyle(fontSize = 12.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
 )
 
 @Composable
