@@ -115,7 +115,7 @@ fun App(vm: ScanViewModel = viewModel()) {
                     history = vm.history,
                     onNewScan = vm::newScan,
                     onSettings = vm::openSettings,
-                    onOpen = { openPdf(context, it) },
+                    onOpen = { openScan(context, it) },
                     onDelete = { vm.deleteScan(context, it) },
                 )
                 Screen.CAMERA -> CameraScreen(
@@ -147,9 +147,14 @@ fun App(vm: ScanViewModel = viewModel()) {
     }
 }
 
-private fun openPdf(context: android.content.Context, record: ScanRecord) {
+private fun openScan(context: android.content.Context, record: ScanRecord) {
+    val mime = if (record.name.endsWith(".jpg", ignoreCase = true)) {
+        "image/jpeg"
+    } else {
+        "application/pdf"
+    }
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(record.uri)).apply {
-        type = "application/pdf"
+        type = mime
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Open PDF"))

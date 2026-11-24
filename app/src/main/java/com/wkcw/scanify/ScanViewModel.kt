@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.wkcw.scanify.history.ScanHistory
 import com.wkcw.scanify.history.ScanRecord
 import com.wkcw.scanify.scanner.DocumentScanner
+import com.wkcw.scanify.scanner.ImageExporter
 import com.wkcw.scanify.scanner.PdfExporter
 import com.wkcw.scanify.scanner.ScanFilter
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +141,36 @@ class ScanViewModel : ViewModel() {
         busy = false
         screen = Screen.HOME
         onDone(uri)
+    }
+
+    fun saveJpg(context: Context, onDone: () -> Unit) = viewModelScope.launch {
+        busy = true
+        preview?.let { pages.add(it) }
+        val allPages = pages.toList()
+        val name = PdfExporter.newName()
+        val uris = withContext(Dispatchers.IO) { ImageExporter.export(context, allPages, name) }
+        uris.forEachIndexed { index, uri ->
+            val id = uri.lastPathSegment?.toLongOrNull() ?: System.currentTimeMillis() + index
+            val thumb = withContext(Dispatchers.IO) {
+                ScanHistory.saveThumbnail(context, id, allPages[index])
+            }
+            ScanHistory.add(
+                context,
+                ScanRecord(
+                    id = id,
+                    name = "${name}_${index + 1}.jpg",
+                    timestamp = System.currentTimeMillis() + index,
+                    pageCount = 1,
+                    uri = uri.toString(),
+                    thumbnail = thumb,
+                ),
+            )
+        }
+        refreshHistory(context)
+        pages.clear()
+        busy = false
+        screen = Screen.HOME
+        onDone()
     }
 
     fun back() {

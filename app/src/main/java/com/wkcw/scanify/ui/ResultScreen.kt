@@ -125,5 +125,18 @@ fun ResultScreen(vm: ScanViewModel) {
                 Text("Save PDF", Modifier.padding(start = 4.dp))
             }
         }
+
+        Spacer(Modifier.height(8.dp))
+        FilledTonalButton(
+            onClick = {
+                vm.saveJpg(context) {
+                    Toast.makeText(context, "Saved JPG to Downloads/Scanify", Toast.LENGTH_LONG).show()
+                }
+            },
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        ) {
+            Icon(Icons.Filled.Check, contentDescription = null)
+            Text("Save JPG", Modifier.padding(start = 4.dp))
+        }
     }
 }
