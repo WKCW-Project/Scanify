@@ -65,10 +65,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+/** Corners are already mapped into the visible preview area, in 0..1 coordinates. */
 private data class ScanGuide(
     val corners: List<PointF>,
-    val frameWidth: Int,
-    val frameHeight: Int,
     val locked: Boolean,
 )
 
@@ -179,10 +178,27 @@ fun CameraScreen(
                         val now = System.currentTimeMillis()
                         if (!captured.get() && now - lastCheck.get() >= 500) {
                             lastCheck.set(now)
-                            val frame = image.toBitmap()
+                            // ImageProxy.toBitmap() returns the raw sensor frame. In portrait
+                            // that frame is landscape, so rotate it before detecting and before
+                            // mapping corners onto the visible preview area.
+                            val raw = image.toBitmap()
+                            val frame = rotateFrame(raw, image.imageInfo.rotationDegrees)
                             val found = DocumentScanner.findDocument(frame)
+                            val previewW = previewView.width.takeIf { it > 0 } ?: frame.width
+                            val previewH = previewView.height.takeIf { it > 0 } ?: frame.height
+                            val scale = maxOf(
+                                previewW.toFloat() / frame.width,
+                                previewH.toFloat() / frame.height,
+                            )
+                            val visibleW = previewW / scale
+                            val visibleH = previewH / scale
+                            val offsetX = (frame.width - visibleW) / 2f
+                            val offsetY = (frame.height - visibleH) / 2f
                             val normalized = found?.map {
-                                PointF(it.x / frame.width, it.y / frame.height)
+                                PointF(
+                                    (it.x - offsetX) / visibleW,
+                                    (it.y - offsetY) / visibleH,
+                                )
                             }
                             if (normalized == null) {
                                 stableHits.set(0)
@@ -202,7 +218,7 @@ fun CameraScreen(
                                 val locked = goodFit && stableHits.get() >= 3
 
                                 mainExecutor.execute {
-                                    scanGuide = ScanGuide(normalized, frame.width, frame.height, locked)
+                                    scanGuide = ScanGuide(normalized, locked)
                                 }
                                 if (autoCapture && locked && captured.compareAndSet(false, true)) {
                                     mainExecutor.execute { takePicture(onError = { captured.set(false) }) }
@@ -255,11 +271,8 @@ fun CameraScreen(
 
             val guide = scanGuide
             if (guide != null) {
-                val scale = maxOf(size.width / guide.frameWidth, size.height / guide.frameHeight)
-                val offX = (size.width - guide.frameWidth * scale) / 2f
-                val offY = (size.height - guide.frameHeight * scale) / 2f
                 val corners = guide.corners.map {
-                    Offset(it.x * guide.frameWidth * scale + offX, it.y * guide.frameHeight * scale + offY)
+                    Offset(it.x * size.width, it.y * size.height)
                 }
                 val lineColor = if (guide.locked) Color.Green else Color.White.copy(alpha = 0.75f)
                 for (i in corners.indices) {
@@ -347,6 +360,13 @@ fun CameraScreen(
             }
         }
     }
+}
+
+/** Apply the sensor rotation to an analysis frame before detecting document corners. */
+private fun rotateFrame(src: Bitmap, rotation: Int): Bitmap {
+    if (rotation % 360 == 0) return src
+    val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+    return Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
 }
 
 /** Normalized area of a four-point quad, used to reject tiny false detections. */

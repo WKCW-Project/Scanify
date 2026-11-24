@@ -27,7 +27,11 @@ object DocumentScanner {
         Imgproc.resize(src, small, Size(src.cols() / ratio, targetH))
 
         val gray = Mat()
-        Imgproc.cvtColor(small, gray, Imgproc.COLOR_RGBA2GRAY)
+        if (small.channels() == 4) {
+            Imgproc.cvtColor(small, gray, Imgproc.COLOR_RGBA2GRAY)
+        } else {
+            Imgproc.cvtColor(small, gray, Imgproc.COLOR_RGB2GRAY)
+        }
         Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
 
         val edges = Mat()
@@ -36,28 +40,44 @@ object DocumentScanner {
         val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
         Imgproc.dilate(edges, edges, kernel)
 
-        val contours = ArrayList<MatOfPoint>()
-        Imgproc.findContours(edges, contours, Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
-        contours.sortByDescending { Imgproc.contourArea(it) }
-
-        val minArea = small.rows() * small.cols() * 0.20
-        var found: List<Point>? = null
-        for (c in contours.take(6)) {
-            if (Imgproc.contourArea(c) < minArea) break
-            val c2f = MatOfPoint2f(*c.toArray())
-            val peri = Imgproc.arcLength(c2f, true)
-            val approx = MatOfPoint2f()
-            Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
-            if (approx.total() == 4L && Imgproc.isContourConvex(MatOfPoint(*approx.toArray()))) {
-                found = approx.toArray().toList()
-                break
-            }
+        val minArea = small.rows() * small.cols() * 0.12
+        var found = findQuad(edges, minArea)
+        if (found == null) {
+            // Weak edges (common in portrait/low light): try a binary image instead.
+            val binary = Mat()
+            Imgproc.threshold(gray, binary, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            found = findQuad(binary, minArea)
+            binary.release()
         }
 
         listOf(src, small, gray, edges, kernel).forEach { it.release() }
 
         return found?.map { PointF((it.x * ratio).toFloat(), (it.y * ratio).toFloat()) }
             ?.let(::orderPoints)
+    }
+
+    /** Pick the largest convex four-point contour in a binary image. */
+    private fun findQuad(binary: Mat, minArea: Double): List<Point>? {
+        val contours = ArrayList<MatOfPoint>()
+        Imgproc.findContours(binary, contours, Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+        contours.sortByDescending { Imgproc.contourArea(it) }
+        for (c in contours.take(8)) {
+            if (Imgproc.contourArea(c) < minArea) break
+            val c2f = MatOfPoint2f(*c.toArray())
+            val peri = Imgproc.arcLength(c2f, true)
+            val approx = MatOfPoint2f()
+            Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
+            val points = approx.toArray().toList()
+            c2f.release()
+            approx.release()
+            val convex = points.size == 4 && MatOfPoint(*points.toTypedArray()).let { contour ->
+                val result = Imgproc.isContourConvex(contour)
+                contour.release()
+                result
+            }
+            if (convex) return points
+        }
+        return null
     }
 
     /** Fallback frame used by the manual crop screen when detection fails. */
