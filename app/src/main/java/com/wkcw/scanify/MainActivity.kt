@@ -35,6 +35,7 @@ import com.wkcw.scanify.ui.CameraScreen
 import com.wkcw.scanify.ui.CropScreen
 import com.wkcw.scanify.ui.HomeScreen
 import com.wkcw.scanify.ui.ResultScreen
+import com.wkcw.scanify.ui.SettingsScreen
 import com.wkcw.scanify.ui.theme.ScanifyTheme
 import org.opencv.android.OpenCVLoader
 
@@ -86,6 +87,7 @@ fun App(vm: ScanViewModel = viewModel()) {
         Screen.CAMERA -> "Scanify"
         Screen.CROP -> "Crop document"
         Screen.RESULT -> "Preview"
+        Screen.SETTINGS -> "Settings"
     }
 
     Scaffold(
@@ -112,6 +114,7 @@ fun App(vm: ScanViewModel = viewModel()) {
                 Screen.HOME -> HomeScreen(
                     history = vm.history,
                     onNewScan = vm::newScan,
+                    onSettings = vm::openSettings,
                     onOpen = { openPdf(context, it) },
                     onDelete = { vm.deleteScan(context, it) },
                 )
@@ -119,12 +122,11 @@ fun App(vm: ScanViewModel = viewModel()) {
                     pageCount = vm.pages.size,
                     autoDetect = vm.autoDetect,
                     autoCapture = vm.autoCapture,
-                    onAutoDetectChange = vm::updateAutoDetect,
-                    onAutoCaptureChange = vm::updateAutoCapture,
                     onCaptured = vm::onCaptured,
                 )
                 Screen.CROP -> CropScreen(vm.captured!!, vm.corners, onConfirm = vm::confirmCrop, onRetake = vm::back)
                 Screen.RESULT -> ResultScreen(vm)
+                Screen.SETTINGS -> SettingsScreen(vm)
             }
 
             if (vm.busy) {

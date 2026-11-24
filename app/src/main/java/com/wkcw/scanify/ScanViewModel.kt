@@ -19,7 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { HOME, CAMERA, CROP, RESULT }
+enum class Screen { HOME, CAMERA, CROP, RESULT, SETTINGS }
 
 class ScanViewModel : ViewModel() {
     var screen by mutableStateOf(Screen.HOME); private set
@@ -46,6 +46,10 @@ class ScanViewModel : ViewModel() {
 
     fun newScan() {
         screen = Screen.CAMERA
+    }
+
+    fun openSettings() {
+        screen = Screen.SETTINGS
     }
 
     fun updateAutoDetect(value: Boolean) {

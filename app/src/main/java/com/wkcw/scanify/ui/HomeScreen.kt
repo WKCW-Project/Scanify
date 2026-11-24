@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ private val filters = listOf("All", "Today", "This week")
 fun HomeScreen(
     history: List<ScanRecord>,
     onNewScan: () -> Unit,
+    onSettings: () -> Unit,
     onOpen: (ScanRecord) -> Unit,
     onDelete: (ScanRecord) -> Unit,
 ) {
@@ -86,16 +88,23 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Text(
-                    "My scans",
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Capture, crop, and save documents.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "My scans",
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Capture, crop, and save documents.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
+                }
             }
 
             item {
