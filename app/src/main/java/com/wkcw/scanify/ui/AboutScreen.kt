@@ -1,7 +1,10 @@
 package com.wkcw.scanify.ui
 
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -26,12 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.wkcw.scanify.BuildConfig
 import com.wkcw.scanify.R
 
 @Composable
 fun AboutScreen() {
     val context = LocalContext.current
+    val (version, build) = appVersion(context)
 
     Column(
         Modifier
@@ -77,9 +80,9 @@ fun AboutScreen() {
             ),
         ) {
             Column(Modifier.padding(20.dp)) {
-                AboutRow("Version", BuildConfig.VERSION_NAME)
+                AboutRow("Version", version)
                 Spacer(Modifier.height(12.dp))
-                AboutRow("Build", BuildConfig.VERSION_CODE.toString())
+                AboutRow("Build", build)
             }
         }
 
@@ -150,6 +153,20 @@ fun AboutScreen() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+private fun appVersion(context: Context): Pair<String, String> {
+    val packageManager = context.packageManager
+    val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        packageManager.getPackageInfo(context.packageName, 0)
+    }
+    return (info.versionName ?: "Unknown") to info.longVersionCode.toString()
 }
 
 @Composable
