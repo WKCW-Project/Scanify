@@ -123,6 +123,7 @@ fun App(vm: ScanViewModel = viewModel()) {
                     autoDetect = vm.autoDetect,
                     autoCapture = vm.autoCapture,
                     onCaptured = vm::onCaptured,
+                    onSettings = vm::openSettings,
                 )
                 Screen.CROP -> CropScreen(vm.captured!!, vm.corners, onConfirm = vm::confirmCrop, onRetake = vm::back)
                 Screen.RESULT -> ResultScreen(vm)

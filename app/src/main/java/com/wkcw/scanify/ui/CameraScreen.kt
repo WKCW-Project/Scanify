@@ -19,7 +19,6 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,9 +30,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,6 +68,10 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /** Corners are already mapped into the visible preview area, in 0..1 coordinates. */
+private val ScannerBackground = Color(0xFF1C1C1E)
+private val ScannerControl = Color(0xFF2C2C2E)
+private val ScannerReady = Color(0xFF66BB6A)
+
 private data class ScanGuide(
     val corners: List<PointF>,
     val locked: Boolean,
@@ -77,6 +83,7 @@ fun CameraScreen(
     autoDetect: Boolean,
     autoCapture: Boolean,
     onCaptured: (Bitmap) -> Unit,
+    onSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     var granted by remember {
@@ -246,23 +253,28 @@ fun CameraScreen(
         AndroidView({ previewView }, Modifier.fillMaxSize())
 
         Canvas(Modifier.fillMaxSize()) {
-            val left = size.width * 0.08f
-            val top = size.height * 0.14f
+            val left = size.width * 0.07f
+            val top = size.height * 0.12f
             val right = size.width - left
-            val bottom = size.height - top
-            val scrim = Color.Black.copy(alpha = 0.42f)
+            val bottom = size.height * 0.80f
+            val scrim = Color.Black.copy(alpha = 0.58f)
 
-            // Dim everything outside the scan area.
+            // Keep the page area clear and dim the rest of the camera feed.
             drawRect(scrim, Offset(0f, 0f), Size(size.width, top))
             drawRect(scrim, Offset(0f, bottom), Size(size.width, size.height - bottom))
             drawRect(scrim, Offset(0f, top), Size(left, bottom - top))
             drawRect(scrim, Offset(right, top), Size(size.width - right, bottom - top))
 
-            // Four scanner-style corner brackets.
             fun bracket(x: Float, y: Float, dx: Float, dy: Float) {
-                val len = 34f
-                drawLine(Color.White, Offset(x, y), Offset(x + dx * len, y), strokeWidth = 6f)
-                drawLine(Color.White, Offset(x, y), Offset(x, y + dy * len), strokeWidth = 6f)
+                val len = 38f
+                drawLine(
+                    Color.White, Offset(x, y), Offset(x + dx * len, y),
+                    strokeWidth = 6f, cap = StrokeCap.Round,
+                )
+                drawLine(
+                    Color.White, Offset(x, y), Offset(x, y + dy * len),
+                    strokeWidth = 6f, cap = StrokeCap.Round,
+                )
             }
             bracket(left, top, 1f, 1f)
             bracket(right, top, -1f, 1f)
@@ -274,28 +286,45 @@ fun CameraScreen(
                 val corners = guide.corners.map {
                     Offset(it.x * size.width, it.y * size.height)
                 }
-                val lineColor = if (guide.locked) Color.Green else Color.White.copy(alpha = 0.75f)
+                val lineColor = if (guide.locked) ScannerReady else Color.White.copy(alpha = 0.85f)
                 for (i in corners.indices) {
-                    drawLine(lineColor, corners[i], corners[(i + 1) % corners.size], strokeWidth = 6f)
+                    drawLine(
+                        lineColor, corners[i], corners[(i + 1) % corners.size],
+                        strokeWidth = 5f, cap = StrokeCap.Round,
+                    )
                 }
                 corners.forEach {
-                    drawCircle(Color.White, 15f, it)
-                    drawCircle(lineColor, 9f, it)
+                    drawCircle(Color.White, 13f, it)
+                    drawCircle(lineColor, 7f, it)
                 }
             }
         }
 
-        if (scanGuide?.locked == true) {
-            Surface(
-                Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primaryContainer,
+        val locked = scanGuide?.locked == true
+        Surface(
+            Modifier.align(Alignment.TopCenter).padding(top = 20.dp),
+            shape = CircleShape,
+            color = Color.Black.copy(alpha = 0.55f),
+        ) {
+            Row(
+                Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (locked) ScannerReady else Color.White.copy(alpha = 0.55f)),
+                )
+                Spacer(Modifier.size(8.dp))
                 Text(
-                    "Document detected",
-                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    when {
+                        locked -> "Document ready"
+                        autoCapture -> "Auto capture"
+                        else -> "Manual capture"
+                    },
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Color.White,
                 )
             }
         }
@@ -303,57 +332,67 @@ fun CameraScreen(
         Surface(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 3.dp,
+            color = ScannerBackground.copy(alpha = 0.96f),
         ) {
             Column(
                 Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        if (autoCapture) "AUTO" else "MANUAL",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        if (pageCount == 0) "0 pages" else "$pageCount page(s)",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
                 Text(
                     when {
-                        autoCapture -> "Fit the document in the guide to capture"
+                        locked -> "Hold steady — capture is ready"
+                        autoCapture -> "Fit the page inside the frame"
                         autoDetect -> "Auto crop is on — tap to capture"
-                        else -> "Tap to capture a page"
+                        else -> "Tap the shutter to capture"
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,
                 )
 
-                Spacer(Modifier.height(16.dp))
-                BadgedBox(badge = { if (pageCount > 0) Badge { Text("$pageCount") } }) {
+                Spacer(Modifier.height(18.dp))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Surface(
+                        Modifier.align(Alignment.CenterStart),
+                        shape = CircleShape,
+                        color = ScannerControl,
+                    ) {
+                        Text(
+                            if (pageCount == 0) "0" else "$pageCount",
+                            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.White,
+                        )
+                    }
+
                     Box(
                         Modifier
-                            .size(76.dp)
+                            .align(Alignment.Center)
+                            .size(78.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(Color.White)
                             .clickable { takePicture() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(
-                            Modifier
-                                .size(60.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface),
+                            Modifier.size(66.dp).clip(CircleShape).background(ScannerBackground),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                Modifier.size(12.dp).clip(CircleShape)
+                                    .background(if (locked) ScannerReady else Color.White),
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onSettings,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    ) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = "Settings",
+                            tint = Color.White,
                         )
                     }
                 }
