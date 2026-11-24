@@ -16,6 +16,7 @@ import androidx.camera.core.Preview
 import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +41,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,6 +60,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+
+private data class ScanGuide(
+    val corners: List<PointF>,
+    val frameWidth: Int,
+    val frameHeight: Int,
+    val locked: Boolean,
+)
 
 @Composable
 fun CameraScreen(
@@ -111,14 +123,18 @@ fun CameraScreen(
     val imageCapture = remember {
         ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build()
     }
-    val previewView = remember { PreviewView(context) }
+    val previewView = remember {
+        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+    }
+    var scanGuide by remember { mutableStateOf<ScanGuide?>(null) }
 
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) {
         onDispose { analysisExecutor.shutdown() }
     }
 
-    DisposableEffect(autoCapture) {
+    val liveDetection = autoDetect || autoCapture
+    DisposableEffect(liveDetection) {
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
@@ -126,19 +142,19 @@ fun CameraScreen(
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
             val useCases = mutableListOf<UseCase>(preview, imageCapture)
 
-            if (autoCapture) {
+            if (liveDetection) {
                 val analysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                 val lastCheck = AtomicLong(0L)
                 val stableHits = AtomicInteger(0)
                 val previousCorners = AtomicReference<List<PointF>?>(null)
-                val ready = AtomicBoolean(true)
+                val captured = AtomicBoolean(false)
 
                 analysis.setAnalyzer(analysisExecutor) { image ->
                     try {
                         val now = System.currentTimeMillis()
-                        if (ready.get() && now - lastCheck.get() >= 600) {
+                        if (!captured.get() && now - lastCheck.get() >= 500) {
                             lastCheck.set(now)
                             val frame = image.toBitmap()
                             val found = DocumentScanner.findDocument(frame)
@@ -148,13 +164,24 @@ fun CameraScreen(
                             if (normalized == null) {
                                 stableHits.set(0)
                                 previousCorners.set(null)
+                                mainExecutor.execute { scanGuide = null }
                             } else {
+                                val inside = normalized.all {
+                                    it.x in 0.04f..0.96f && it.y in 0.04f..0.96f
+                                }
+                                val goodFit = inside && quadArea(normalized) >= 0.35f
                                 val stable = previousCorners.get()?.zip(normalized)
-                                    ?.all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < 0.03f } == true
-                                stableHits.set(if (stable) stableHits.get() + 1 else 1)
+                                    ?.all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < 0.025f } == true
+                                stableHits.set(
+                                    if (!goodFit) 0 else if (stable) stableHits.get() + 1 else 1
+                                )
                                 previousCorners.set(normalized)
+                                val locked = goodFit && stableHits.get() >= 3
 
-                                if (stableHits.get() >= 3 && ready.compareAndSet(true, false)) {
+                                mainExecutor.execute {
+                                    scanGuide = ScanGuide(normalized, frame.width, frame.height, locked)
+                                }
+                                if (autoCapture && locked && captured.compareAndSet(false, true)) {
                                     mainExecutor.execute {
                                         imageCapture.takePicture(
                                             mainExecutor,
@@ -167,7 +194,7 @@ fun CameraScreen(
                                                 }
 
                                                 override fun onError(e: ImageCaptureException) {
-                                                    ready.set(true)
+                                                    captured.set(false)
                                                     e.printStackTrace()
                                                 }
                                             },
@@ -196,6 +223,36 @@ fun CameraScreen(
     Box(Modifier.fillMaxSize()) {
         AndroidView({ previewView }, Modifier.fillMaxSize())
 
+        Canvas(Modifier.fillMaxSize()) {
+            val insetX = size.width * 0.08f
+            val insetY = size.height * 0.12f
+            drawRoundRect(
+                color = Color.White.copy(alpha = 0.4f),
+                topLeft = Offset(insetX, insetY),
+                size = Size(size.width - insetX * 2, size.height - insetY * 2),
+                cornerRadius = CornerRadius(24f),
+                style = Stroke(width = 3f),
+            )
+
+            val guide = scanGuide
+            if (guide != null) {
+                val scale = maxOf(size.width / guide.frameWidth, size.height / guide.frameHeight)
+                val offX = (size.width - guide.frameWidth * scale) / 2f
+                val offY = (size.height - guide.frameHeight * scale) / 2f
+                val corners = guide.corners.map {
+                    Offset(it.x * guide.frameWidth * scale + offX, it.y * guide.frameHeight * scale + offY)
+                }
+                val lineColor = if (guide.locked) Color.Green else Color.White
+                for (i in corners.indices) {
+                    drawLine(lineColor, corners[i], corners[(i + 1) % corners.size], strokeWidth = 6f)
+                }
+                corners.forEach {
+                    drawCircle(Color.White, 16f, it)
+                    drawCircle(lineColor, 10f, it)
+                }
+            }
+        }
+
         Surface(
             Modifier.align(Alignment.TopStart).padding(16.dp),
             shape = MaterialTheme.shapes.small,
@@ -215,7 +272,7 @@ fun CameraScreen(
         ) {
             Text(
                 when {
-                    autoCapture -> "Auto capture is on — hold the document steady"
+                    autoCapture -> "Fit the document in the guide to capture"
                     autoDetect -> "Auto crop is on — tap to capture"
                     else -> "Tap to capture a page"
                 },
@@ -251,6 +308,17 @@ fun CameraScreen(
             }
         }
     }
+}
+
+/** Normalized area of a four-point quad, used to reject tiny false detections. */
+private fun quadArea(points: List<PointF>): Float {
+    var sum = 0f
+    for (i in points.indices) {
+        val a = points[i]
+        val b = points[(i + 1) % points.size]
+        sum += a.x * b.y - b.x * a.y
+    }
+    return kotlin.math.abs(sum) / 2f
 }
 
 /** Rotate according to the sensor orientation and downscale to keep memory usage low. */
