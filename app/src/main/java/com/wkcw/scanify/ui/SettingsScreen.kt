@@ -81,7 +81,7 @@ fun SettingsScreen(vm: ScanViewModel, onAbout: () -> Unit) {
                 ) {
                     Box(Modifier.fillMaxSize(), Alignment.Center) {
                         Image(
-                            painterResource(R.mipmap.ic_launcher),
+                            painterResource(R.drawable.ic_app),
                             contentDescription = null,
                             modifier = Modifier.size(30.dp),
                         )
