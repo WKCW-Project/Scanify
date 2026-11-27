@@ -34,9 +34,9 @@ A lightweight Android document scanner built with Kotlin and Jetpack Compose. Sc
 
 ### Requirements
 
-- Android Studio with AGP 8.5.2 support
-- JDK 17
-- Android SDK 34
+- Android Studio with AGP 9.3.1 support
+- JDK 21
+- Android SDK 37
 - An `arm64-v8a` device or emulator with a camera
 
 ### Build locally
@@ -91,21 +91,31 @@ If replacing an earlier unsigned or differently signed debug build, uninstall it
 
 ```text
 app/src/main/java/com/wkcw/scanify/
-├── MainActivity.kt          # Navigation and top-level Scaffold
-├── ScanViewModel.kt         # Screen state, capture pipeline, exports, history
+├── MainActivity.kt          # coui-nav back stack and edge-to-edge setup
+├── ScanViewModel.kt         # Screen state, capture pipeline, exports, history, prefs
 ├── ui/
-│   ├── CameraScreen.kt      # CameraX preview, guide overlay, auto capture
+│   ├── CouiBlur.kt          # COUI 17 page backdrop and material blur bridge
+│   ├── CouiPage.kt          # Reusable COUI collapsing top bar page scaffolds
+│   ├── CameraScreen.kt      # CameraX preview, live guide overlay, auto capture
 │   ├── CropScreen.kt        # Draggable document corners
 │   ├── ResultScreen.kt      # Rotate, filter, save, add page
-│   ├── HomeScreen.kt        # Scan history and filter chips
-│   ├── SettingsScreen.kt    # Auto detect / auto capture toggles
-│   └── theme/Theme.kt       # App color palette, shapes, typography
+│   ├── HomeScreen.kt        # Scan history, top-bar search, and filter chips
+│   ├── SettingsScreen.kt    # Scanning, appearance, and COUI blur toggles
+│   ├── AboutScreen.kt       # App version info and repository link
+│   └── theme/Theme.kt       # COUI 17 Green theme controller
 ├── scanner/
-│   ├── DocumentScanner.kt   # OpenCV detection, warp, rotate, filters
+│   ├── DocumentScanner.kt   # OpenCV multi-pass detection, warp, rotate, filters
 │   ├── ImageExporter.kt     # JPG export via MediaStore
 │   └── PdfExporter.kt       # PDF export via MediaStore
 └── history/ScanHistory.kt   # Scan records and thumbnails
 ```
+
+## Credits
+
+- [**COUI**](https://github.com/suqi8/coui) by [@suqi8](https://github.com/suqi8) — ColorOS 17 / COUI 17 Compose Multiplatform UI components, preferences, material blur, icons, squircle shapes, and `coui-nav`.
+- [**OpenCV**](https://opencv.org/) — Document edge detection, perspective correction, rotation, and image filters.
+- [**AndroidX CameraX**](https://developer.android.com/training/camerax) — Live camera preview, frame analysis, and low-latency capture.
+- [**Jetpack Compose**](https://developer.android.com/compose) — Declarative Android UI toolkit.
 
 ## Contributing
 
