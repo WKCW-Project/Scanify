@@ -20,13 +20,14 @@ A lightweight Android document scanner built with Kotlin and Jetpack Compose. Sc
 
 | Area | Choice |
 | --- | --- |
-| Language | Kotlin 2.0.20 |
-| UI | Jetpack Compose, Material 3 |
+| Language | Kotlin 2.4.10 |
+| UI | Jetpack Compose, COUI 17 (ColorOS 17 design) |
+| Navigation | `coui-nav` (COUI page transitions & predictive back) |
 | Camera | CameraX 1.3.4 |
 | Document processing | OpenCV 4.9.0 |
 | Architecture | Android ViewModel + Compose state |
-| Build | AGP 8.5.2, Gradle 8.7, JDK 17 |
-| SDK | `compileSdk` / `targetSdk` 34, `minSdk` 29 |
+| Build | AGP 9.3.1, Gradle 9.6.1, JDK 21 |
+| SDK | `compileSdk` / `targetSdk` 37, `minSdk` 29 (COUI 17 blur on Android 13+) |
 | ABI | `arm64-v8a` only (native libs use legacy packaging to keep the APK small) |
 
 ## Getting started

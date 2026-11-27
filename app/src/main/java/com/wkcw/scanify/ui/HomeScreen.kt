@@ -1,236 +1,463 @@
+@file:OptIn(ExperimentalScrollBarApi::class)
+
 package com.wkcw.scanify.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.wkcw.scanify.R
 import com.wkcw.scanify.history.ScanHistory
 import com.wkcw.scanify.history.ScanRecord
+import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListGroup
+import io.github.suqi8.coui.kmp.basic.Chip
+import io.github.suqi8.coui.kmp.basic.ChipGroup
+import io.github.suqi8.coui.kmp.basic.EmptyState
+import io.github.suqi8.coui.kmp.basic.FloatingActionButton
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.SnackbarHostState
+import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.basic.TopAppBarSearchBar
+import io.github.suqi8.coui.kmp.basic.VerticalScrollBar
+import io.github.suqi8.coui.kmp.basic.rememberScrollBarAdapter
+import io.github.suqi8.coui.kmp.basic.rememberTopAppBarSearchState
+import io.github.suqi8.coui.kmp.basic.topAppBarSearchContent
+import io.github.suqi8.coui.kmp.basic.topAppBarSearchResults
+import io.github.suqi8.coui.kmp.blur.MaterialBlurDefaults
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Delete
+import io.github.suqi8.coui.kmp.icon.extended.File
+import io.github.suqi8.coui.kmp.icon.extended.Scan
+import io.github.suqi8.coui.kmp.icon.extended.Search
+import io.github.suqi8.coui.kmp.icon.extended.Settings
+import io.github.suqi8.coui.kmp.interfaces.ExperimentalScrollBarApi
+import io.github.suqi8.coui.kmp.layout.DialogButtonBar
+import io.github.suqi8.coui.kmp.layout.DialogButtonBarAction
+import io.github.suqi8.coui.kmp.layout.DialogDefaults
+import io.github.suqi8.coui.kmp.overlay.OverlayDialog
+import io.github.suqi8.coui.kmp.squircle.squircleClip
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.CouiHapticEffect
+import io.github.suqi8.coui.kmp.utils.rememberCOUIFlingBehavior
+import io.github.suqi8.coui.kmp.utils.rememberCouiHaptic
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private val filters = listOf("All", "Today", "This week")
+private const val FILTER_ALL = 0
+private const val FILTER_TODAY = 1
+private const val FILTER_WEEK = 2
+private const val ONE_DAY_MS = 24L * 60 * 60 * 1000L
+private const val ONE_WEEK_MS = 7L * ONE_DAY_MS
 
 @Composable
 fun HomeScreen(
     history: List<ScanRecord>,
+    @StringRes pendingSnackbarRes: Int?,
+    onSnackbarShown: () -> Unit,
     onNewScan: () -> Unit,
     onSettings: () -> Unit,
     onOpen: (ScanRecord) -> Unit,
     onDelete: (ScanRecord) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    var selectedFilter by remember { mutableIntStateOf(0) }
-    val visible = remember(history, selectedFilter) {
-        val now = System.currentTimeMillis()
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val haptic = rememberCouiHaptic()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    var selectedFilter by rememberSaveable { mutableIntStateOf(FILTER_ALL) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var pendingDelete by remember { mutableStateOf<ScanRecord?>(null) }
+
+    val searchState = rememberTopAppBarSearchState(active = searching)
+    val pageListState = rememberLazyListState()
+    val resultsListState = rememberLazyListState()
+
+    LaunchedEffect(pendingSnackbarRes) {
+        if (pendingSnackbarRes != null) {
+            val message = context.getString(pendingSnackbarRes)
+            onSnackbarShown()
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    // Clear keyboard focus as soon as the user starts scrolling search results.
+    LaunchedEffect(resultsListState.isScrollInProgress) {
+        if (resultsListState.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
+
+    val now = remember(history.size, selectedFilter) { System.currentTimeMillis() }
+    val todayCount = remember(history, now) { history.count { now - it.timestamp < ONE_DAY_MS } }
+    val weekCount = remember(history, now) { history.count { now - it.timestamp < ONE_WEEK_MS } }
+
+    val visible = remember(history, selectedFilter, now) {
         when (selectedFilter) {
-            1 -> history.filter { now - it.timestamp < 24 * 60 * 60 * 1000L }
-            2 -> history.filter { now - it.timestamp < 7 * 24 * 60 * 60 * 1000L }
+            FILTER_TODAY -> history.filter { now - it.timestamp < ONE_DAY_MS }
+            FILTER_WEEK -> history.filter { now - it.timestamp < ONE_WEEK_MS }
             else -> history
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNewScan,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "New scan")
+    val searchResults = remember(history, query) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            history
+        } else {
+            history.filter { it.name.contains(trimmed, ignoreCase = true) }
+        }
+    }
+
+    CouiPageScaffold(
+        title = stringResource(R.string.home_title),
+        modifier = modifier,
+        topBarStyle = CouiTopBarStyle.SettingsHome,
+        wide = isWideWindow(),
+        topBarSearchState = searchState,
+        snackbarHostState = snackbarHostState,
+        actions = {
+            IconButton(onClick = onSettings) {
+                Icon(
+                    imageVector = COUIIcons.Settings,
+                    contentDescription = stringResource(R.string.common_settings),
+                    tint = COUITheme.colorScheme.labelPrimary,
+                )
             }
         },
-    ) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(
-                start = 20.dp,
-                top = 16.dp,
-                end = 20.dp,
-                bottom = 96.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "My scans",
-                            style = MaterialTheme.typography.headlineMedium,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Capture, crop, and save documents.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
-                }
+        topBarBottomContent = {
+            TopAppBarSearchBar(
+                query = query,
+                onQueryChange = { query = it },
+                expanded = searching,
+                onExpandedChange = { expanded ->
+                    searching = expanded
+                    if (!expanded) query = ""
+                },
+                cancelText = stringResource(R.string.common_cancel),
+                label = stringResource(R.string.home_search_hint),
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    haptic(CouiHapticEffect.Switch)
+                    onNewScan()
+                },
+                visible = !searching,
+            ) {
+                Icon(
+                    imageVector = COUIIcons.Scan,
+                    contentDescription = stringResource(R.string.home_new_scan),
+                    tint = COUITheme.colorScheme.onPrimary,
+                )
             }
-
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    filters.forEachIndexed { index, label ->
-                        FilterChip(
-                            selected = selectedFilter == index,
-                            onClick = { selectedFilter = index },
-                            label = { Text(label) },
-                        )
-                    }
-                }
-            }
-
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Recent scans",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (visible.isNotEmpty()) {
-                        Text(
-                            "${visible.size}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            if (visible.isEmpty()) {
-                item {
-                    Surface(
-                        Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                    ) {
-                        Column(
-                            Modifier.padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
+        },
+    ) { pageScope ->
+        Box(Modifier.fillMaxSize()) {
+            if (searchState.isContentVisible) {
+                LazyColumn(
+                    state = pageListState,
+                    modifier = Modifier
+                        .couiPageScroll(pageScope)
+                        .topAppBarSearchContent(searchState),
+                    contentPadding = pageScope.contentPadding,
+                    flingBehavior = rememberCOUIFlingBehavior(),
+                ) {
+                    item(key = "home_filters") {
+                        ChipGroup(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            singleLine = true,
                         ) {
-                            Icon(
-                                Icons.Filled.List,
-                                contentDescription = null,
-                                Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary,
+                            Chip(
+                                selected = selectedFilter == FILTER_ALL,
+                                onClick = { selectedFilter = FILTER_ALL },
+                                label = stringResource(R.string.home_filter_all),
+                                count = history.size.takeIf { it > 0 }?.toString(),
                             )
-                            Spacer(Modifier.height(12.dp))
-                            Text("No scans yet", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Your saved PDFs will show up here.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Chip(
+                                selected = selectedFilter == FILTER_TODAY,
+                                onClick = { selectedFilter = FILTER_TODAY },
+                                label = stringResource(R.string.home_filter_today),
+                                count = todayCount.takeIf { it > 0 }?.toString(),
+                            )
+                            Chip(
+                                selected = selectedFilter == FILTER_WEEK,
+                                onClick = { selectedFilter = FILTER_WEEK },
+                                label = stringResource(R.string.home_filter_week),
+                                count = weekCount.takeIf { it > 0 }?.toString(),
                             )
                         }
                     }
+
+                    if (visible.isEmpty()) {
+                        item(key = "home_empty") {
+                            val isFiltered = selectedFilter != FILTER_ALL && history.isNotEmpty()
+                            EmptyState(
+                                title = stringResource(
+                                    if (isFiltered) R.string.home_filter_empty_title else R.string.home_empty_title,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(380.dp),
+                                subtitle = stringResource(
+                                    if (isFiltered) R.string.home_filter_empty_summary else R.string.home_empty_summary,
+                                ),
+                                actionText = if (isFiltered) {
+                                    stringResource(R.string.home_filter_all)
+                                } else {
+                                    stringResource(R.string.home_empty_action)
+                                },
+                                onActionClick = {
+                                    if (isFiltered) {
+                                        selectedFilter = FILTER_ALL
+                                    } else {
+                                        onNewScan()
+                                    }
+                                },
+                                illustration = {
+                                    Icon(
+                                        imageVector = COUIIcons.Scan,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = COUITheme.colorScheme.primary,
+                                    )
+                                },
+                            )
+                        }
+                    } else {
+                        item(key = "home_recent_section") {
+                            PreferenceCategory(
+                                title = stringResource(R.string.home_recent_scans),
+                                titleBadge = visible.size.toString(),
+                            )
+                            Card(
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .padding(bottom = 16.dp),
+                            ) {
+                                CardListGroup {
+                                    visible.forEach { record ->
+                                        item(key = record.id) {
+                                            ScanHistoryRow(
+                                                record = record,
+                                                onOpen = { onOpen(record) },
+                                                onDelete = { pendingDelete = record },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Keep the bottom rows clear of the floating action button.
+                    item(key = "home_fab_spacer") {
+                        Spacer(Modifier.height(96.dp))
+                    }
                 }
-            } else {
-                items(visible, key = { it.id }) { record ->
-                    ScanHistoryCard(record, onOpen, onDelete)
+                VerticalScrollBar(
+                    adapter = rememberScrollBarAdapter(pageListState),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                    trackPadding = pageScope.contentPadding,
+                )
+            }
+
+            if (searchState.isResultsVisible) {
+                LazyColumn(
+                    state = resultsListState,
+                    modifier = Modifier
+                        .couiPageScroll(pageScope)
+                        .topAppBarSearchResults(searchState),
+                    contentPadding = pageScope.contentPadding,
+                    flingBehavior = rememberCOUIFlingBehavior(),
+                ) {
+                    if (searchResults.isEmpty()) {
+                        item(key = "search_empty") {
+                            EmptyState(
+                                title = stringResource(R.string.home_search_empty_title),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(340.dp),
+                                subtitle = stringResource(R.string.home_search_empty_summary),
+                                illustration = {
+                                    Icon(
+                                        imageVector = COUIIcons.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(56.dp),
+                                        tint = COUITheme.colorScheme.labelTertiary,
+                                    )
+                                },
+                            )
+                        }
+                    } else {
+                        item(key = "search_results_section") {
+                            PreferenceCategory(
+                                title = stringResource(R.string.home_search_results),
+                                titleBadge = searchResults.size.toString(),
+                            )
+                            Card(
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .padding(bottom = 16.dp),
+                            ) {
+                                CardListGroup {
+                                    searchResults.forEach { record ->
+                                        item(key = "search_${record.id}") {
+                                            ScanHistoryRow(
+                                                record = record,
+                                                onOpen = { onOpen(record) },
+                                                onDelete = { pendingDelete = record },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item(key = "search_tail") { Spacer(Modifier.height(32.dp)) }
                 }
             }
+
+            DeleteScanDialog(
+                record = pendingDelete,
+                onConfirm = { record ->
+                    pendingDelete = null
+                    onDelete(record)
+                    scope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.home_deleted_snackbar))
+                    }
+                },
+                onDismiss = { pendingDelete = null },
+            )
         }
     }
 }
 
 @Composable
-private fun ScanHistoryCard(
+private fun ScanHistoryRow(
     record: ScanRecord,
-    onOpen: (ScanRecord) -> Unit,
-    onDelete: (ScanRecord) -> Unit,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val date = SimpleDateFormat("MMM d, yyyy • HH:mm", Locale.getDefault()).format(record.timestamp)
-    val thumb = ScanHistory.thumbnail(record.thumbnail)
+    val date = remember(record.timestamp) {
+        SimpleDateFormat("MMM d, yyyy · HH:mm", Locale.getDefault()).format(record.timestamp)
+    }
+    val thumb = remember(record.thumbnail) { ScanHistory.thumbnail(record.thumbnail) }
+    val pagesLabel = if (record.pageCount == 1) {
+        stringResource(R.string.home_page_count_one, record.pageCount)
+    } else {
+        stringResource(R.string.home_page_count_other, record.pageCount)
+    }
+    val formatLabel = if (record.name.endsWith(".jpg", ignoreCase = true)) "JPG" else "PDF"
 
-    Surface(
-        Modifier.fillMaxWidth().clickable { onOpen(record) },
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                Modifier.size(76.dp),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    BasicComponent(
+        title = record.name,
+        modifier = modifier,
+        summary = "$date · $pagesLabel · $formatLabel",
+        onClick = onOpen,
+        startAction = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .squircleClip(12.dp)
+                    .background(COUITheme.colorScheme.secondary),
+                contentAlignment = Alignment.Center,
             ) {
                 if (thumb != null) {
                     Image(
-                        thumb.asImageBitmap(),
+                        bitmap = thumb.asImageBitmap(),
                         contentDescription = null,
-                        Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
                 } else {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Icon(Icons.Filled.List, contentDescription = null)
-                    }
+                    Icon(
+                        imageVector = COUIIcons.File,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = COUITheme.colorScheme.primary,
+                    )
                 }
             }
-
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    record.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    date,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "${record.pageCount} page(s)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+        },
+        endActions = {
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = COUIIcons.Delete,
+                    contentDescription = stringResource(R.string.common_delete),
+                    tint = COUITheme.colorScheme.labelTertiary,
                 )
             }
+        },
+    )
+}
 
-            IconButton(onClick = { onDelete(record) }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete scan")
-            }
-        }
+@Composable
+private fun DeleteScanDialog(
+    record: ScanRecord?,
+    onConfirm: (ScanRecord) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val blur = panelBlur(MaterialBlurDefaults::dialog)
+    OverlayDialog(
+        show = record != null,
+        modifier = modifier,
+        title = stringResource(R.string.home_delete_title),
+        summary = record?.let { stringResource(R.string.home_delete_summary, it.name) },
+        backgroundModifier = blur?.backgroundModifier ?: Modifier,
+        backgroundColor = blur?.backgroundColor ?: DialogDefaults.backgroundColor(),
+        materialStroke = blur != null,
+        onDismissRequest = onDismiss,
+    ) {
+        DialogButtonBar(
+            negative = DialogButtonBarAction(
+                text = stringResource(R.string.common_cancel),
+                onClick = onDismiss,
+            ),
+            positive = null,
+            neutral = DialogButtonBarAction(
+                text = stringResource(R.string.common_delete),
+                onClick = { record?.let(onConfirm) },
+            ),
+        )
     }
 }

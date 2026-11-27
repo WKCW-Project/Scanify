@@ -1,17 +1,17 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
     namespace = "com.wkcw.scanify"
-    compileSdk = 34
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.wkcw.scanify"
         minSdk = 29
-        targetSdk = 34
+        targetSdk = 37
         // Each CI run gets a higher versionCode so an install can update in place.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0"
@@ -20,7 +20,7 @@ android {
     }
 
     // Compress native libs to keep the APK well under Telegram's upload limit.
-    packagingOptions {
+    packaging {
         jniLibs {
             useLegacyPackaging = true
         }
@@ -48,24 +48,34 @@ android {
             if (signingKeystore != null) signingConfig = signingConfigs.getByName("ci")
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
-    kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+
+    buildFeatures {
+        compose = true
+    }
+}
+
+kotlin {
+    jvmToolchain(21)
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.activity:activity-compose:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
-    // Material3 1.5 requires AGP 9.1 and compileSdk 37; keep the BOM in sync with AGP 8.5.2.
-    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
+    val couiVersion = "2.1.0"
+    implementation("io.github.suqi8.coui.kmp:coui-ui-android:$couiVersion")
+    implementation("io.github.suqi8.coui.kmp:coui-preference-android:$couiVersion")
+    implementation("io.github.suqi8.coui.kmp:coui-blur-android:$couiVersion")
+    implementation("io.github.suqi8.coui.kmp:coui-icons-android:$couiVersion")
+    implementation("io.github.suqi8.coui.kmp:coui-squircle-android:$couiVersion")
+    implementation("io.github.suqi8.coui.kmp:coui-nav-android:$couiVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
 
     val camerax = "1.3.4"
     implementation("androidx.camera:camera-core:$camerax")

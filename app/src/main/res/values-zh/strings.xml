@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Scanify</string>
+
+    <!-- Common -->
+    <string name="common_back">返回</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_delete">删除</string>
+    <string name="common_continue">继续</string>
+    <string name="common_settings">设置</string>
+    <string name="common_processing">处理中…</string>
+    <string name="common_opencv_error_title">OpenCV 不可用</string>
+    <string name="common_opencv_error_summary">OpenCV 加载失败，请重启或重新安装 Scanify。</string>
+    <string name="common_open_document">打开文档</string>
+
+    <!-- Home -->
+    <string name="home_title">Scanify</string>
+    <string name="home_search_hint">搜索扫描文档</string>
+    <string name="home_new_scan">新建扫描</string>
+    <string name="home_filter_all">全部</string>
+    <string name="home_filter_today">今天</string>
+    <string name="home_filter_week">本周</string>
+    <string name="home_recent_scans">最近扫描</string>
+    <string name="home_search_results">搜索结果</string>
+    <string name="home_empty_title">暂无扫描记录</string>
+    <string name="home_empty_summary">使用相机拍摄文档，并保存为 PDF 或 JPG。</string>
+    <string name="home_empty_action">开始扫描</string>
+    <string name="home_filter_empty_title">没有匹配的记录</string>
+    <string name="home_filter_empty_summary">切换筛选条件或扫描新文档。</string>
+    <string name="home_search_empty_title">无搜索结果</string>
+    <string name="home_search_empty_summary">未找到与关键词匹配的文档。</string>
+    <string name="home_page_count_one">共 %1$d 页</string>
+    <string name="home_page_count_other">共 %1$d 页</string>
+    <string name="home_delete_title">删除扫描记录？</string>
+    <string name="home_delete_summary">确定从历史记录中移除“%1$s”吗？</string>
+    <string name="home_deleted_snackbar">已从历史记录中移除</string>
+    <string name="home_saved_pdf_snackbar">PDF 已保存到 Downloads/Scanify</string>
+    <string name="home_saved_jpg_snackbar">JPG 已保存到 Downloads/Scanify</string>
+
+    <!-- Camera -->
+    <string name="camera_permission_title">需要相机权限</string>
+    <string name="camera_permission_summary">授予相机权限以自动检测并扫描文档。</string>
+    <string name="camera_permission_grant">授予权限</string>
+    <string name="camera_status_ready">文档已就绪</string>
+    <string name="camera_status_auto">自动拍摄</string>
+    <string name="camera_status_manual">手动拍摄</string>
+    <string name="camera_hint_ready">请保持稳定，即将自动拍摄</string>
+    <string name="camera_hint_auto_capture">将页面完整放入取景框内</string>
+    <string name="camera_hint_auto_detect">已开启自动裁剪，点击快门拍摄</string>
+    <string name="camera_hint_manual">点击快门按钮进行拍摄</string>
+    <string name="camera_shutter">拍摄文档</string>
+    <string name="camera_toggle_auto">切换自动拍摄</string>
+    <string name="camera_pages_badge">%1$d</string>
+
+    <!-- Crop -->
+    <string name="crop_title">裁剪文档</string>
+    <string name="crop_instruction">拖动四个角点以贴合页面边缘。</string>
+    <string name="crop_retake">重拍</string>
+
+    <!-- Result -->
+    <string name="result_title">预览</string>
+    <string name="result_subtitle_single">页面已就绪</string>
+    <string name="result_subtitle_multi">第 %1$d 页已就绪</string>
+    <string name="result_no_preview">暂无预览</string>
+    <string name="result_rotate">旋转</string>
+    <string name="result_rotate_left">向左旋转</string>
+    <string name="result_rotate_right">向右旋转</string>
+    <string name="result_adjust_crop">调整裁剪</string>
+    <string name="result_filter">滤镜</string>
+    <string name="result_filter_original">原图</string>
+    <string name="result_filter_gray">灰度</string>
+    <string name="result_filter_bw">黑白</string>
+    <string name="result_add_page">继续添加</string>
+    <string name="result_save_pdf">保存 PDF</string>
+    <string name="result_save_jpg">另存为 JPG</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_category_scanning">扫描</string>
+    <string name="settings_auto_detect_title">自动检测</string>
+    <string name="settings_auto_detect_summary">自动识别文档边缘并裁剪。</string>
+    <string name="settings_auto_capture_title">自动拍摄</string>
+    <string name="settings_auto_capture_summary">文档在取景框内稳定后自动拍摄。</string>
+    <string name="settings_category_appearance">外观</string>
+    <string name="settings_theme_title">色彩模式</string>
+    <string name="settings_theme_summary">设置应用的浅色、深色或动态取色方案。</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_monet">动态取色 (Monet)</string>
+    <string name="settings_blur_title">COUI 17 材质模糊</string>
+    <string name="settings_blur_summary">为顶栏、对话框和浮层启用毛玻璃效果（Android 13+）。</string>
+    <string name="settings_category_about">关于</string>
+    <string name="settings_about_title">关于 Scanify</string>
+    <string name="settings_about_summary">版本与应用信息</string>
+
+    <!-- About -->
+    <string name="about_title">关于</string>
+    <string name="about_version_format">版本 %1$s (%2$s)</string>
+    <string name="about_copy_version">复制版本号</string>
+    <string name="about_copied_snackbar">版本号已复制到剪贴板</string>
+    <string name="about_category_info">应用详情</string>
+    <string name="about_version_label">版本</string>
+    <string name="about_build_label">构建号</string>
+    <string name="about_description_title">功能简介</string>
+    <string name="about_description_summary">使用相机扫描文档、手动微调四角、应用滤镜，并导出为 PDF 或 JPG。</string>
+    <string name="about_category_links">项目</string>
+    <string name="about_source_title">源代码</string>
+    <string name="about_source_summary">WKCW-Project/Scanify</string>
+    <string name="about_copyright">© 2026 Scanify</string>
+    <string name="about_unknown">未知</string>
+</resources>

@@ -1,161 +1,171 @@
 package com.wkcw.scanify.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.wkcw.scanify.R
+import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListGroup
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.SnackbarHostState
+import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Link
+import io.github.suqi8.coui.kmp.preference.AppInfoPreference
+import io.github.suqi8.coui.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.launch
 
 @Composable
-fun AboutScreen() {
+fun AboutScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
-    val (version, build) = appVersion(context)
+    val (version, build) = remember(context) { appVersion(context) }
+    val versionLine = stringResource(R.string.about_version_format, version, build)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+    CouiPage(
+        title = stringResource(R.string.about_title),
+        modifier = modifier,
+        onBack = onBack,
+        wide = isWideWindow(),
+        snackbarHostState = snackbarHostState,
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, top = 28.dp, end = 24.dp, bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Surface(
-                Modifier.size(88.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
+        item(key = "app_header") {
+            AppInfoPreference(
+                appName = stringResource(R.string.app_name),
+                appVersion = versionLine,
+                icon = {
                     Image(
-                        painterResource(R.drawable.ic_app),
+                        painter = painterResource(R.drawable.ic_app),
                         contentDescription = null,
-                        modifier = Modifier.size(64.dp),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Text("Scanify", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Document scanner",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                },
+                copyText = stringResource(R.string.about_copy_version),
+                onCopyClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("version", versionLine))
+                    scope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.about_copied_snackbar))
+                    }
+                },
             )
         }
 
-        Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                AboutRow("Version", version)
-                Spacer(Modifier.height(12.dp))
-                AboutRow("Build", build)
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                Text("What it does", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Scan a page with your camera, adjust its corners, apply a filter, and save it as PDF or JPG.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Card(
-            onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/WKCW-Project/Scanify"))
-                context.startActivity(intent)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        item(key = "app_details") {
+            PreferenceCategory(title = stringResource(R.string.about_category_info))
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Source code", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "WKCW-Project/Scanify",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                CardListGroup {
+                    item(key = "version") {
+                        BasicComponent(
+                            title = stringResource(R.string.about_version_label),
+                            endActions = {
+                                Text(
+                                    text = version,
+                                    style = COUITheme.textStyles.bodyM,
+                                    color = COUITheme.colorScheme.labelTertiary,
+                                )
+                            },
+                        )
+                    }
+                    item(key = "build") {
+                        BasicComponent(
+                            title = stringResource(R.string.about_build_label),
+                            endActions = {
+                                Text(
+                                    text = build,
+                                    style = COUITheme.textStyles.bodyM,
+                                    color = COUITheme.colorScheme.labelTertiary,
+                                )
+                            },
+                        )
+                    }
+                    item(key = "description") {
+                        BasicComponent(
+                            title = stringResource(R.string.about_description_title),
+                            summary = stringResource(R.string.about_description_summary),
+                        )
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "Open",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
             }
         }
 
-        Spacer(Modifier.weight(1f))
-        Text(
-            "© 2026 Scanify",
-            Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(bottom = 20.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        item(key = "project_links") {
+            PreferenceCategory(title = stringResource(R.string.about_category_links))
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+            ) {
+                CardListGroup {
+                    item(key = "source_code") {
+                        ArrowPreference(
+                            title = stringResource(R.string.about_source_title),
+                            summary = stringResource(R.string.about_source_summary),
+                            startAction = {
+                                Icon(
+                                    imageVector = COUIIcons.Link,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = COUITheme.colorScheme.primary,
+                                )
+                            },
+                            onClick = {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/WKCW-Project/Scanify"),
+                                )
+                                context.startActivity(intent)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        item(key = "copyright") {
+            Text(
+                text = stringResource(R.string.about_copyright),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                style = COUITheme.textStyles.bodyXS,
+                color = COUITheme.colorScheme.labelTertiary,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
-private fun appVersion(context: Context): Pair<String, String> {
+internal fun appVersion(context: Context): Pair<String, String> {
     val packageManager = context.packageManager
     val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         packageManager.getPackageInfo(
@@ -166,21 +176,6 @@ private fun appVersion(context: Context): Pair<String, String> {
         @Suppress("DEPRECATION")
         packageManager.getPackageInfo(context.packageName, 0)
     }
-    return (info.versionName ?: "Unknown") to info.longVersionCode.toString()
-}
-
-@Composable
-private fun AboutRow(label: String, value: String) {
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            label,
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(value, style = MaterialTheme.typography.titleMedium)
-    }
+    val unknown = context.getString(R.string.about_unknown)
+    return (info.versionName ?: unknown) to info.longVersionCode.toString()
 }

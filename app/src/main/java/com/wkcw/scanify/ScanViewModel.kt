@@ -4,7 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.PointF
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -16,23 +18,31 @@ import com.wkcw.scanify.scanner.DocumentScanner
 import com.wkcw.scanify.scanner.ImageExporter
 import com.wkcw.scanify.scanner.PdfExporter
 import com.wkcw.scanify.scanner.ScanFilter
+import io.github.suqi8.coui.kmp.theme.ColorSchemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { HOME, CAMERA, CROP, RESULT, SETTINGS, ABOUT }
+private const val PREFS_NAME = "scanify_prefs"
+private const val KEY_AUTO_DETECT = "auto_detect"
+private const val KEY_AUTO_CAPTURE = "auto_capture"
+private const val KEY_COLOR_MODE = "color_mode"
+private const val KEY_MATERIAL_BLUR = "material_blur"
 
 class ScanViewModel : ViewModel() {
-    var screen by mutableStateOf(Screen.HOME); private set
     var busy by mutableStateOf(false); private set
     var autoDetect by mutableStateOf(true); private set
     var autoCapture by mutableStateOf(true); private set
+    var colorMode by mutableStateOf(ColorSchemeMode.System); private set
+    var materialBlurEnabled by mutableStateOf(true); private set
+    @StringRes
+    var pendingSnackbarRes by mutableStateOf<Int?>(null); private set
 
     var captured by mutableStateOf<Bitmap?>(null); private set
     var corners by mutableStateOf<List<PointF>>(emptyList()); private set
     var preview by mutableStateOf<Bitmap?>(null); private set
     var filter by mutableStateOf(ScanFilter.BW); private set
-    var rotation by mutableStateOf(0); private set
+    var rotation by mutableIntStateOf(0); private set
 
     val history = mutableStateListOf<ScanRecord>()
 
@@ -40,33 +50,50 @@ class ScanViewModel : ViewModel() {
     private var editedWarp: Bitmap? = null
     val pages = mutableStateListOf<Bitmap>()
 
+    private var prefsLoaded = false
+
+    fun loadPreferences(context: Context) {
+        if (prefsLoaded) return
+        prefsLoaded = true
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        autoDetect = prefs.getBoolean(KEY_AUTO_DETECT, true)
+        autoCapture = prefs.getBoolean(KEY_AUTO_CAPTURE, true)
+        materialBlurEnabled = prefs.getBoolean(KEY_MATERIAL_BLUR, true)
+        val savedMode = prefs.getString(KEY_COLOR_MODE, null)
+        colorMode = ColorSchemeMode.entries.firstOrNull { it.name == savedMode } ?: ColorSchemeMode.System
+    }
+
     fun refreshHistory(context: Context) {
         history.clear()
         history.addAll(ScanHistory.load(context))
     }
 
-    fun newScan() {
-        screen = Screen.CAMERA
-    }
-
-    fun openSettings() {
-        screen = Screen.SETTINGS
-    }
-
-    fun openAbout() {
-        screen = Screen.ABOUT
-    }
-
-    fun updateAutoDetect(value: Boolean) {
+    fun updateAutoDetect(context: Context, value: Boolean) {
         autoDetect = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AUTO_DETECT, value).apply()
     }
 
-    fun updateAutoCapture(value: Boolean) {
+    fun updateAutoCapture(context: Context, value: Boolean) {
         autoCapture = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AUTO_CAPTURE, value).apply()
     }
 
-    fun goHome() {
-        screen = Screen.HOME
+    fun updateColorMode(context: Context, mode: ColorSchemeMode) {
+        colorMode = mode
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_COLOR_MODE, mode.name).apply()
+    }
+
+    fun updateMaterialBlur(context: Context, enabled: Boolean) {
+        materialBlurEnabled = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_MATERIAL_BLUR, enabled).apply()
+    }
+
+    fun consumePendingSnackbar() {
+        pendingSnackbarRes = null
     }
 
     fun deleteScan(context: Context, record: ScanRecord) {
@@ -74,7 +101,11 @@ class ScanViewModel : ViewModel() {
         refreshHistory(context)
     }
 
-    fun onCaptured(bmp: Bitmap) = viewModelScope.launch {
+    fun onCaptured(
+        bmp: Bitmap,
+        onNavigateToResult: () -> Unit,
+        onNavigateToCrop: () -> Unit,
+    ) = viewModelScope.launch {
         busy = true
         val detected = withContext(Dispatchers.Default) { DocumentScanner.findDocument(bmp) }
         captured = bmp
@@ -82,20 +113,25 @@ class ScanViewModel : ViewModel() {
         if (autoDetect && detected != null) {
             val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, detected) }
             setWarped(warped)
-            screen = Screen.RESULT
+            busy = false
+            onNavigateToResult()
         } else {
-            screen = Screen.CROP
+            busy = false
+            onNavigateToCrop()
         }
-        busy = false
     }
 
-    fun confirmCrop(finalCorners: List<PointF>) = viewModelScope.launch {
+    fun confirmCrop(
+        finalCorners: List<PointF>,
+        onNavigateToResult: () -> Unit,
+    ) = viewModelScope.launch {
+        val source = captured ?: return@launch
         busy = true
         corners = finalCorners
-        val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(captured!!, finalCorners) }
+        val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(source, finalCorners) }
         setWarped(warped)
-        screen = Screen.RESULT
         busy = false
+        onNavigateToResult()
     }
 
     private suspend fun setWarped(warped: Bitmap) {
@@ -123,9 +159,9 @@ class ScanViewModel : ViewModel() {
     }
 
     /** Save this page and return to the camera for the next one. */
-    fun addPage() {
+    fun addPage(onNavigateToCamera: () -> Unit) {
         preview?.let { pages.add(it) }
-        screen = Screen.CAMERA
+        onNavigateToCamera()
     }
 
     fun savePdf(context: Context, onDone: (Uri) -> Unit) = viewModelScope.launch {
@@ -142,8 +178,8 @@ class ScanViewModel : ViewModel() {
         )
         refreshHistory(context)
         pages.clear()
+        pendingSnackbarRes = R.string.home_saved_pdf_snackbar
         busy = false
-        screen = Screen.HOME
         onDone(uri)
     }
 
@@ -172,17 +208,8 @@ class ScanViewModel : ViewModel() {
         }
         refreshHistory(context)
         pages.clear()
+        pendingSnackbarRes = R.string.home_saved_jpg_snackbar
         busy = false
-        screen = Screen.HOME
         onDone()
-    }
-
-    fun back() {
-        screen = when (screen) {
-            Screen.RESULT -> Screen.CROP
-            Screen.CROP -> Screen.CAMERA
-            Screen.ABOUT -> Screen.SETTINGS
-            else -> Screen.HOME
-        }
     }
 }

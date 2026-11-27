@@ -1,154 +1,186 @@
 package com.wkcw.scanify.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.wkcw.scanify.R
 import com.wkcw.scanify.ScanViewModel
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListGroup
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Background
+import io.github.suqi8.coui.kmp.icon.extended.Layers
+import io.github.suqi8.coui.kmp.icon.extended.Scan
+import io.github.suqi8.coui.kmp.icon.extended.ScreenCapture
+import io.github.suqi8.coui.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.preference.OverlayDropdownPreference
+import io.github.suqi8.coui.kmp.preference.SwitchPreference
+import io.github.suqi8.coui.kmp.squircle.squircleClip
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.theme.ColorSchemeMode
+
+private val ThemeModes = listOf(
+    ColorSchemeMode.System,
+    ColorSchemeMode.Light,
+    ColorSchemeMode.Dark,
+    ColorSchemeMode.MonetSystem,
+)
 
 @Composable
-fun SettingsScreen(vm: ScanViewModel, onAbout: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Scan settings", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Tune how documents are captured.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(20.dp))
+fun SettingsScreen(
+    vm: ScanViewModel,
+    onBack: () -> Unit,
+    onAbout: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val (versionName, _) = appVersion(context)
+    val selectedThemeIndex = ThemeModes.indexOf(vm.colorMode).coerceAtLeast(0)
 
-        SettingCard(
-            icon = Icons.Filled.Search,
-            title = "Auto detect",
-            description = "Find the document and crop it automatically.",
-            checked = vm.autoDetect,
-            onCheckedChange = vm::updateAutoDetect,
-        )
-        Spacer(Modifier.height(12.dp))
-        SettingCard(
-            icon = Icons.Filled.Check,
-            title = "Auto capture",
-            description = "Capture when the guide lines fit the document.",
-            checked = vm.autoCapture,
-            onCheckedChange = vm::updateAutoCapture,
-        )
-
-        Spacer(Modifier.height(24.dp))
-        Text("About", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        Card(
-            onClick = onAbout,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        ) {
-            Row(
-                Modifier.padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    CouiPage(
+        title = stringResource(R.string.settings_title),
+        modifier = modifier,
+        onBack = onBack,
+        wide = isWideWindow(),
+    ) {
+        item(key = "scanning") {
+            PreferenceCategory(title = stringResource(R.string.settings_category_scanning))
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
             ) {
-                Surface(
-                    Modifier.size(44.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Image(
-                            painterResource(R.drawable.ic_app),
-                            contentDescription = null,
-                            modifier = Modifier.size(30.dp),
+                CardListGroup {
+                    item(key = "auto_detect") {
+                        SwitchPreference(
+                            checked = vm.autoDetect,
+                            onCheckedChange = { vm.updateAutoDetect(context, it) },
+                            title = stringResource(R.string.settings_auto_detect_title),
+                            summary = stringResource(R.string.settings_auto_detect_summary),
+                            startAction = {
+                                Icon(
+                                    imageVector = COUIIcons.Scan,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = COUITheme.colorScheme.primary,
+                                )
+                            },
+                        )
+                    }
+                    item(key = "auto_capture") {
+                        SwitchPreference(
+                            checked = vm.autoCapture,
+                            onCheckedChange = { vm.updateAutoCapture(context, it) },
+                            title = stringResource(R.string.settings_auto_capture_title),
+                            summary = stringResource(R.string.settings_auto_capture_summary),
+                            startAction = {
+                                Icon(
+                                    imageVector = COUIIcons.ScreenCapture,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = COUITheme.colorScheme.primary,
+                                )
+                            },
                         )
                     }
                 }
+            }
+        }
 
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Scanify", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Version and app details",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        item(key = "appearance") {
+            PreferenceCategory(title = stringResource(R.string.settings_category_appearance))
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+            ) {
+                CardListGroup {
+                    item(key = "color_mode") {
+                        OverlayDropdownPreference(
+                            items = listOf(
+                                stringResource(R.string.settings_theme_system),
+                                stringResource(R.string.settings_theme_light),
+                                stringResource(R.string.settings_theme_dark),
+                                stringResource(R.string.settings_theme_monet),
+                            ),
+                            selectedIndex = selectedThemeIndex,
+                            title = stringResource(R.string.settings_theme_title),
+                            summary = stringResource(R.string.settings_theme_summary),
+                            startAction = {
+                                Icon(
+                                    imageVector = COUIIcons.Background,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = COUITheme.colorScheme.primary,
+                                )
+                            },
+                            onSelectedIndexChange = { index ->
+                                vm.updateColorMode(context, ThemeModes[index])
+                            },
+                        )
+                    }
+                    item(key = "material_blur") {
+                        SwitchPreference(
+                            checked = vm.materialBlurEnabled,
+                            onCheckedChange = { vm.updateMaterialBlur(context, it) },
+                            title = stringResource(R.string.settings_blur_title),
+                            summary = stringResource(R.string.settings_blur_summary),
+                            startAction = {
+                                Icon(
+                                    imageVector = COUIIcons.Layers,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = COUITheme.colorScheme.primary,
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun SettingCard(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-    ) {
-        Row(
-            Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                Modifier.size(44.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
+        item(key = "about") {
+            PreferenceCategory(title = stringResource(R.string.settings_category_about))
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
             ) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
+                CardListGroup {
+                    item(key = "about_entry") {
+                        ArrowPreference(
+                            title = stringResource(R.string.settings_about_title),
+                            summary = stringResource(R.string.settings_about_summary),
+                            startAction = {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_app),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .squircleClip(6.dp),
+                                )
+                            },
+                            endActions = {
+                                Text(
+                                    text = versionName,
+                                    style = COUITheme.textStyles.bodyM,
+                                    color = COUITheme.colorScheme.labelTertiary,
+                                )
+                            },
+                            onClick = onAbout,
+                        )
+                    }
                 }
             }
-
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
