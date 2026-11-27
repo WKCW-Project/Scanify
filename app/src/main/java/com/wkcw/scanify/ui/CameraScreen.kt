@@ -16,6 +16,8 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCase
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.animateFloatAsState
@@ -93,11 +95,12 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 
-private const val ANALYSIS_INTERVAL_MS = 120L
-private const val LOCK_REQUIRED_HITS = 5
+private const val ANALYSIS_INTERVAL_MS = 150L
+private const val CAMERA_WARMUP_MS = 650L
+private const val LOCK_REQUIRED_HITS = 7
 private const val MAX_MISSED_FRAMES = 2
-private const val STABILITY_MAX_DELTA = 0.038f
-private const val SMOOTHING_ALPHA = 0.48f
+private const val STABILITY_MAX_DELTA = 0.022f
+private const val SMOOTHING_ALPHA = 0.42f
 
 /** Corners are already mapped into the visible preview area, in 0..1 coordinates. */
 private data class ScanGuide(
@@ -162,9 +165,15 @@ fun CameraScreen(
     }
 
     val lifecycleOwner = context as LifecycleOwner
-    val imageCapture = remember {
+    val resolutionSelector = remember {
+        ResolutionSelector.Builder()
+            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+            .build()
+    }
+    val imageCapture = remember(resolutionSelector) {
         ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setResolutionSelector(resolutionSelector)
             .build()
     }
     val previewView = remember {
@@ -221,13 +230,18 @@ fun CameraScreen(
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             val provider = future.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+            val preview = Preview.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .build()
+                .also { it.setSurfaceProvider(previewView.surfaceProvider) }
             val useCases = mutableListOf<UseCase>(preview, imageCapture)
 
             if (liveDetection) {
                 val analysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setResolutionSelector(resolutionSelector)
                     .build()
+                val startTime = System.currentTimeMillis()
                 val lastCheck = AtomicLong(0L)
                 val stableHits = AtomicInteger(0)
                 val missedFrames = AtomicInteger(0)
@@ -237,7 +251,11 @@ fun CameraScreen(
                 analysis.setAnalyzer(analysisExecutor) { image ->
                     try {
                         val now = System.currentTimeMillis()
-                        if (!captureInFlight.get() && now - lastCheck.get() >= ANALYSIS_INTERVAL_MS) {
+                        if (
+                            !captureInFlight.get() &&
+                            now - startTime >= CAMERA_WARMUP_MS &&
+                            now - lastCheck.get() >= ANALYSIS_INTERVAL_MS
+                        ) {
                             lastCheck.set(now)
                             val raw = image.toBitmap()
                             val frame = rotateFrame(raw, image.imageInfo.rotationDegrees)
@@ -283,10 +301,13 @@ fun CameraScreen(
                                 )
 
                                 val inside = smoothed.all {
-                                    it.x in 0.015f..0.985f && it.y in 0.015f..0.985f
+                                    it.x in 0.03f..0.97f && it.y in 0.09f..0.83f
                                 }
+                                val cx = smoothed.sumOf { it.x.toDouble() }.toFloat() / 4f
+                                val cy = smoothed.sumOf { it.y.toDouble() }.toFloat() / 4f
+                                val centered = cx in 0.18f..0.82f && cy in 0.22f..0.68f
                                 val area = quadArea(smoothed)
-                                val goodFit = inside && area in 0.12f..0.93f
+                                val goodFit = inside && centered && area in 0.18f..0.82f
                                 val prev = previousCorners.get()
                                 val stable = prev != null && prev.zip(smoothed)
                                     .all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < STABILITY_MAX_DELTA }
@@ -558,29 +579,46 @@ fun CameraScreen(
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(78.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .semantics {
-                                contentDescription = shutterDescription
-                                role = Role.Button
-                            }
-                            .clickable(enabled = !busy) { takePicture() },
+                            .size(82.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        if (autoCapture && animatedProgress > 0.02f) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                drawArc(
+                                    color = readyColor,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * animatedProgress,
+                                    useCenter = false,
+                                    style = Stroke(width = 6f, cap = StrokeCap.Round),
+                                )
+                            }
+                        }
                         Box(
                             modifier = Modifier
-                                .size(66.dp)
+                                .size(74.dp)
                                 .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.88f)),
+                                .background(Color.White)
+                                .semantics {
+                                    contentDescription = shutterDescription
+                                    role = Role.Button
+                                }
+                                .clickable(enabled = !busy) { takePicture() },
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(16.dp)
+                                    .size(62.dp)
                                     .clip(CircleShape)
-                                    .background(if (locked || detecting) readyColor else Color.White),
-                            )
+                                    .background(Color.Black.copy(alpha = 0.88f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(if (locked || detecting) readyColor else Color.White),
+                                )
+                            }
                         }
                     }
 

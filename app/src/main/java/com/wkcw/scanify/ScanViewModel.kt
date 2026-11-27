@@ -113,11 +113,10 @@ class ScanViewModel : ViewModel() {
             ?.takeIf { it.size == 4 }
             ?.map { PointF(it.x * bmp.width, it.y * bmp.height) }
             ?.let(DocumentScanner::orderPoints)
-        val bestCorners = detected ?: hintMapped
         captured = bmp
-        corners = bestCorners ?: withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
-        if (autoDetect && bestCorners != null) {
-            val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, bestCorners) }
+        corners = detected ?: hintMapped ?: withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
+        if (autoDetect && detected != null) {
+            val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, detected) }
             setWarped(warped)
             busy = false
             onNavigateToResult()
