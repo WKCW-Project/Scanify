@@ -45,6 +45,8 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Ok
 import io.github.suqi8.coui.kmp.squircle.squircleClip
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.CouiHapticEffect
+import io.github.suqi8.coui.kmp.utils.rememberCouiHaptic
 import kotlin.math.hypot
 import kotlin.math.min
 
@@ -60,6 +62,7 @@ fun CropScreen(
     val pts = remember(bitmap, initial) {
         mutableStateListOf<PointF>().apply { addAll(initial.map { PointF(it.x, it.y) }) }
     }
+    val haptic = rememberCouiHaptic()
     val lineColor = COUITheme.colorScheme.primary
     val handleCenterColor = COUITheme.colorScheme.onPrimary
     val activeCenterColor = COUITheme.colorScheme.secondary
@@ -110,10 +113,11 @@ fun CropScreen(
                         )
 
                         var active by remember { mutableIntStateOf(-1) }
+                        val touchRadiusPx = with(density) { 48.dp.toPx() }
                         Canvas(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .pointerInput(scale) {
+                                .pointerInput(scale, touchRadiusPx) {
                                     detectDragGestures(
                                         onDragStart = { start ->
                                             val idx = pts.indices.minByOrNull {
@@ -124,7 +128,9 @@ fun CropScreen(
                                                 active = -1
                                             } else {
                                                 val v = toView(pts[idx])
-                                                active = if (hypot(v.x - start.x, v.y - start.y) < 112f) idx else -1
+                                                val hit = hypot(v.x - start.x, v.y - start.y) <= touchRadiusPx
+                                                active = if (hit) idx else -1
+                                                if (hit) haptic(CouiHapticEffect.Switch)
                                             }
                                         },
                                         onDragEnd = { active = -1 },
@@ -202,8 +208,13 @@ fun CropScreen(
                                 )
                             }
                             v.forEachIndexed { i, o ->
-                                drawCircle(lineColor, 22f, o)
-                                drawCircle(if (i == active) activeCenterColor else handleCenterColor, 14f, o)
+                                val isActive = i == active
+                                drawCircle(lineColor, if (isActive) 28f else 22f, o)
+                                drawCircle(
+                                    if (isActive) activeCenterColor else handleCenterColor,
+                                    if (isActive) 16f else 14f,
+                                    o,
+                                )
                             }
                         }
                     }

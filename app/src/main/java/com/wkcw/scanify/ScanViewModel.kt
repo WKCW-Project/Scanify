@@ -103,15 +103,21 @@ class ScanViewModel : ViewModel() {
 
     fun onCaptured(
         bmp: Bitmap,
+        hintNormalizedCorners: List<PointF>? = null,
         onNavigateToResult: () -> Unit,
         onNavigateToCrop: () -> Unit,
     ) = viewModelScope.launch {
         busy = true
-        val detected = withContext(Dispatchers.Default) { DocumentScanner.findDocument(bmp) }
+        val detected = withContext(Dispatchers.Default) { DocumentScanner.findDocument(bmp, fast = false) }
+        val hintMapped = hintNormalizedCorners
+            ?.takeIf { it.size == 4 }
+            ?.map { PointF(it.x * bmp.width, it.y * bmp.height) }
+            ?.let(DocumentScanner::orderPoints)
+        val bestCorners = detected ?: hintMapped
         captured = bmp
-        corners = detected ?: withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
-        if (autoDetect && detected != null) {
-            val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, detected) }
+        corners = bestCorners ?: withContext(Dispatchers.Default) { DocumentScanner.detectCorners(bmp) }
+        if (autoDetect && bestCorners != null) {
+            val warped = withContext(Dispatchers.Default) { DocumentScanner.warp(bmp, bestCorners) }
             setWarped(warped)
             busy = false
             onNavigateToResult()

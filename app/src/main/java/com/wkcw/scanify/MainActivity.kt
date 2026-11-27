@@ -177,9 +177,10 @@ fun ScanifyApp(
                 busy = vm.busy,
                 onBack = { popBack(backStack) },
                 onToggleAutoCapture = { vm.updateAutoCapture(context, !vm.autoCapture) },
-                onCaptured = { bmp ->
+                onCaptured = { bmp, hintCorners ->
                     vm.onCaptured(
                         bmp = bmp,
+                        hintNormalizedCorners = hintCorners,
                         onNavigateToResult = { backStack.add(Route.Result) },
                         onNavigateToCrop = { backStack.add(Route.Crop) },
                     )

@@ -42,9 +42,11 @@
     <string name="camera_permission_summary">授予相机权限以自动检测并扫描文档。</string>
     <string name="camera_permission_grant">授予权限</string>
     <string name="camera_status_ready">文档已就绪</string>
+    <string name="camera_status_detecting">请保持稳定…</string>
     <string name="camera_status_auto">自动拍摄</string>
     <string name="camera_status_manual">手动拍摄</string>
-    <string name="camera_hint_ready">请保持稳定，即将自动拍摄</string>
+    <string name="camera_hint_ready">正在拍摄文档…</string>
+    <string name="camera_hint_holding">已识别文档，保持稳定即可自动拍摄</string>
     <string name="camera_hint_auto_capture">将页面完整放入取景框内</string>
     <string name="camera_hint_auto_detect">已开启自动裁剪，点击快门拍摄</string>
     <string name="camera_hint_manual">点击快门按钮进行拍摄</string>

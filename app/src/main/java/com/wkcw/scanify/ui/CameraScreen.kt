@@ -7,7 +7,9 @@ import android.graphics.Matrix
 import android.graphics.PointF
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -16,9 +18,12 @@ import androidx.camera.core.Preview
 import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +51,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -74,7 +82,9 @@ import io.github.suqi8.coui.kmp.icon.extended.Settings
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.CouiHapticEffect
 import io.github.suqi8.coui.kmp.utils.rememberCouiHaptic
+import kotlinx.coroutines.delay
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -83,9 +93,16 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 
+private const val ANALYSIS_INTERVAL_MS = 120L
+private const val LOCK_REQUIRED_HITS = 5
+private const val MAX_MISSED_FRAMES = 2
+private const val STABILITY_MAX_DELTA = 0.038f
+private const val SMOOTHING_ALPHA = 0.48f
+
 /** Corners are already mapped into the visible preview area, in 0..1 coordinates. */
 private data class ScanGuide(
     val corners: List<PointF>,
+    val lockProgress: Float,
     val locked: Boolean,
 )
 
@@ -97,7 +114,7 @@ fun CameraScreen(
     busy: Boolean,
     onBack: () -> Unit,
     onToggleAutoCapture: () -> Unit,
-    onCaptured: (Bitmap) -> Unit,
+    onCaptured: (Bitmap, List<PointF>?) -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -146,15 +163,35 @@ fun CameraScreen(
 
     val lifecycleOwner = context as LifecycleOwner
     val imageCapture = remember {
-        ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build()
+        ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .build()
     }
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
+    val cameraRef = remember { AtomicReference<Camera?>(null) }
+    val captureInFlight = remember { AtomicBoolean(false) }
+    val latestFrameCorners = remember { AtomicReference<List<PointF>?>(null) }
     var scanGuide by remember { mutableStateOf<ScanGuide?>(null) }
+    var focusTap by remember { mutableStateOf<Offset?>(null) }
     val mainExecutor = ContextCompat.getMainExecutor(context)
 
-    fun takePicture(onError: () -> Unit = {}) {
+    LaunchedEffect(busy) {
+        if (!busy) {
+            captureInFlight.set(false)
+        }
+    }
+
+    LaunchedEffect(focusTap) {
+        if (focusTap != null) {
+            delay(750)
+            focusTap = null
+        }
+    }
+
+    fun takePicture(hintNormalizedCorners: List<PointF>? = latestFrameCorners.get()) {
+        if (!captureInFlight.compareAndSet(false, true)) return
         haptic(CouiHapticEffect.Strength)
         imageCapture.takePicture(
             mainExecutor,
@@ -163,11 +200,11 @@ fun CameraScreen(
                     val bmp = image.toBitmap()
                     val rotation = image.imageInfo.rotationDegrees
                     image.close()
-                    onCaptured(prepare(bmp, rotation))
+                    onCaptured(prepare(bmp, rotation), hintNormalizedCorners)
                 }
 
                 override fun onError(e: ImageCaptureException) {
-                    onError()
+                    captureInFlight.set(false)
                     e.printStackTrace()
                 }
             },
@@ -193,27 +230,32 @@ fun CameraScreen(
                     .build()
                 val lastCheck = AtomicLong(0L)
                 val stableHits = AtomicInteger(0)
+                val missedFrames = AtomicInteger(0)
+                val smoothedCorners = AtomicReference<List<PointF>?>(null)
                 val previousCorners = AtomicReference<List<PointF>?>(null)
-                val captured = AtomicBoolean(false)
 
                 analysis.setAnalyzer(analysisExecutor) { image ->
                     try {
                         val now = System.currentTimeMillis()
-                        if (!captured.get() && now - lastCheck.get() >= 500) {
+                        if (!captureInFlight.get() && now - lastCheck.get() >= ANALYSIS_INTERVAL_MS) {
                             lastCheck.set(now)
                             val raw = image.toBitmap()
                             val frame = rotateFrame(raw, image.imageInfo.rotationDegrees)
-                            val found = DocumentScanner.findDocument(frame)
-                            val previewW = previewView.width.takeIf { it > 0 } ?: frame.width
-                            val previewH = previewView.height.takeIf { it > 0 } ?: frame.height
+                            if (frame !== raw) raw.recycle()
+                            val frameW = frame.width
+                            val frameH = frame.height
+                            val found = DocumentScanner.findDocument(frame, fast = true)
+                            frame.recycle()
+                            val previewW = previewView.width.takeIf { it > 0 } ?: frameW
+                            val previewH = previewView.height.takeIf { it > 0 } ?: frameH
                             val scale = maxOf(
-                                previewW.toFloat() / frame.width,
-                                previewH.toFloat() / frame.height,
+                                previewW.toFloat() / frameW,
+                                previewH.toFloat() / frameH,
                             )
                             val visibleW = previewW / scale
                             val visibleH = previewH / scale
-                            val offsetX = (frame.width - visibleW) / 2f
-                            val offsetY = (frame.height - visibleH) / 2f
+                            val offsetX = (frameW - visibleW) / 2f
+                            val offsetY = (frameH - visibleH) / 2f
                             val normalized = found?.map {
                                 PointF(
                                     (it.x - offsetX) / visibleW,
@@ -221,27 +263,49 @@ fun CameraScreen(
                                 )
                             }
                             if (normalized == null) {
-                                stableHits.set(0)
-                                previousCorners.set(null)
-                                mainExecutor.execute { scanGuide = null }
-                            } else {
-                                val inside = normalized.all {
-                                    it.x in 0.04f..0.96f && it.y in 0.04f..0.96f
+                                val misses = missedFrames.incrementAndGet()
+                                if (misses > MAX_MISSED_FRAMES) {
+                                    stableHits.set(0)
+                                    previousCorners.set(null)
+                                    smoothedCorners.set(null)
+                                    latestFrameCorners.set(null)
+                                    mainExecutor.execute { scanGuide = null }
                                 }
-                                val goodFit = inside && quadArea(normalized) >= 0.35f
-                                val stable = previousCorners.get()?.zip(normalized)
-                                    ?.all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < 0.025f } == true
-                                stableHits.set(
-                                    if (!goodFit) 0 else if (stable) stableHits.get() + 1 else 1,
+                            } else {
+                                missedFrames.set(0)
+                                val smoothed = smoothCorners(smoothedCorners.get(), normalized)
+                                smoothedCorners.set(smoothed)
+
+                                // Also store corners normalized to the full sensor frame as a
+                                // fallback for photo auto-crop.
+                                latestFrameCorners.set(
+                                    found.map { PointF(it.x / frameW, it.y / frameH) },
                                 )
-                                previousCorners.set(normalized)
-                                val locked = goodFit && stableHits.get() >= 3
+
+                                val inside = smoothed.all {
+                                    it.x in 0.015f..0.985f && it.y in 0.015f..0.985f
+                                }
+                                val area = quadArea(smoothed)
+                                val goodFit = inside && area in 0.12f..0.93f
+                                val prev = previousCorners.get()
+                                val stable = prev != null && prev.zip(smoothed)
+                                    .all { (a, b) -> hypot(a.x - b.x, a.y - b.y) < STABILITY_MAX_DELTA }
+                                val hits = when {
+                                    !goodFit -> 0
+                                    stable -> (stableHits.get() + 1).coerceAtMost(LOCK_REQUIRED_HITS)
+                                    else -> 1
+                                }
+                                stableHits.set(hits)
+                                previousCorners.set(smoothed)
+                                val progress = (hits.toFloat() / LOCK_REQUIRED_HITS).coerceIn(0f, 1f)
+                                val locked = goodFit && hits >= LOCK_REQUIRED_HITS
 
                                 mainExecutor.execute {
-                                    scanGuide = ScanGuide(normalized, locked)
+                                    scanGuide = ScanGuide(smoothed, progress, locked)
                                 }
-                                if (autoCapture && locked && captured.compareAndSet(false, true)) {
-                                    mainExecutor.execute { takePicture(onError = { captured.set(false) }) }
+                                if (autoCapture && locked && !captureInFlight.get()) {
+                                    val fallback = latestFrameCorners.get()
+                                    mainExecutor.execute { takePicture(fallback) }
                                 }
                             }
                         }
@@ -250,33 +314,60 @@ fun CameraScreen(
                     }
                 }
                 useCases.add(analysis)
+            } else {
+                latestFrameCorners.set(null)
+                scanGuide = null
             }
 
             provider.unbindAll()
-            provider.bindToLifecycle(
+            val boundCamera = provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 *useCases.toTypedArray(),
             )
+            cameraRef.set(boundCamera)
         }, mainExecutor)
-        onDispose { future.get().unbindAll() }
+        onDispose {
+            cameraRef.set(null)
+            future.get().unbindAll()
+        }
     }
 
     val readyColor = COUITheme.colorScheme.primary
     // Viewfinder overlays sit over the live camera feed, so dark scrim and light ink stay legible.
-    val cameraScrim = Color.Black.copy(alpha = 0.56f)
+    val cameraScrim = Color.Black.copy(alpha = 0.50f)
     val cameraDeck = Color.Black.copy(alpha = 0.84f)
     val cameraPill = Color.Black.copy(alpha = 0.52f)
     val cameraControlFill = Color.White.copy(alpha = 0.16f)
     val shutterDescription = stringResource(R.string.camera_shutter)
+    val animatedProgress by animateFloatAsState(
+        targetValue = scanGuide?.lockProgress ?: 0f,
+        animationSpec = tween(durationMillis = 120),
+        label = "lock_progress",
+    )
 
     Scaffold(modifier = modifier) {
         Box(Modifier.fillMaxSize()) {
             AndroidView({ previewView }, Modifier.fillMaxSize())
 
-            Canvas(Modifier.fillMaxSize()) {
-                val left = size.width * 0.07f
-                val top = size.height * 0.14f
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            focusTap = offset
+                            val factory = previewView.meteringPointFactory
+                            val point = factory.createPoint(offset.x, offset.y)
+                            val action = FocusMeteringAction.Builder(
+                                point,
+                                FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+                            ).setAutoCancelDuration(3, TimeUnit.SECONDS).build()
+                            cameraRef.get()?.cameraControl?.startFocusAndMetering(action)
+                        }
+                    },
+            ) {
+                val left = size.width * 0.06f
+                val top = size.height * 0.13f
                 val right = size.width - left
                 val bottom = size.height * 0.77f
 
@@ -306,21 +397,49 @@ fun CameraScreen(
                     val corners = guide.corners.map {
                         Offset(it.x * size.width, it.y * size.height)
                     }
-                    val lineColor = if (guide.locked) readyColor else Color.White.copy(alpha = 0.88f)
+                    val activeColor = if (guide.locked || guide.lockProgress >= 0.4f) {
+                        readyColor
+                    } else {
+                        Color.White.copy(alpha = 0.92f)
+                    }
+                    val fillPath = Path().apply {
+                        moveTo(corners[0].x, corners[0].y)
+                        for (i in 1 until corners.size) {
+                            lineTo(corners[i].x, corners[i].y)
+                        }
+                        close()
+                    }
+                    drawPath(
+                        path = fillPath,
+                        color = activeColor.copy(alpha = 0.10f + 0.16f * animatedProgress),
+                    )
                     for (i in corners.indices) {
                         drawLine(
-                            lineColor, corners[i], corners[(i + 1) % corners.size],
-                            strokeWidth = 5f, cap = StrokeCap.Round,
+                            activeColor,
+                            corners[i],
+                            corners[(i + 1) % corners.size],
+                            strokeWidth = if (guide.locked) 7f else 5.5f,
+                            cap = StrokeCap.Round,
                         )
                     }
                     corners.forEach {
                         drawCircle(Color.White, 13f, it)
-                        drawCircle(lineColor, 7f, it)
+                        drawCircle(activeColor, 7.5f, it)
                     }
+                }
+
+                focusTap?.let { tap ->
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.85f),
+                        radius = 44f,
+                        center = tap,
+                        style = Stroke(width = 3.5f),
+                    )
                 }
             }
 
             val locked = scanGuide?.locked == true
+            val detecting = scanGuide != null && !locked
 
             Row(
                 modifier = Modifier
@@ -358,12 +477,19 @@ fun CameraScreen(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(if (locked) readyColor else Color.White.copy(alpha = 0.6f)),
+                            .background(
+                                when {
+                                    locked -> readyColor
+                                    detecting -> readyColor.copy(alpha = 0.75f)
+                                    else -> Color.White.copy(alpha = 0.6f)
+                                },
+                            ),
                     )
                     Spacer(Modifier.size(8.dp))
                     Text(
                         text = when {
                             locked -> stringResource(R.string.camera_status_ready)
+                            detecting && autoCapture -> stringResource(R.string.camera_status_detecting)
                             autoCapture -> stringResource(R.string.camera_status_auto)
                             else -> stringResource(R.string.camera_status_manual)
                         },
@@ -402,6 +528,7 @@ fun CameraScreen(
                 Text(
                     text = when {
                         locked -> stringResource(R.string.camera_hint_ready)
+                        detecting && autoCapture -> stringResource(R.string.camera_hint_holding)
                         autoCapture -> stringResource(R.string.camera_hint_auto_capture)
                         autoDetect -> stringResource(R.string.camera_hint_auto_detect)
                         else -> stringResource(R.string.camera_hint_manual)
@@ -452,7 +579,7 @@ fun CameraScreen(
                                 modifier = Modifier
                                     .size(16.dp)
                                     .clip(CircleShape)
-                                    .background(if (locked) readyColor else Color.White),
+                                    .background(if (locked || detecting) readyColor else Color.White),
                             )
                         }
                     }
@@ -483,6 +610,20 @@ fun CameraScreen(
 
             ProcessingOverlay(show = busy)
         }
+    }
+}
+
+/** Exponentially smooth corners between frames to eliminate hand-tremor jitter. */
+private fun smoothCorners(previous: List<PointF>?, current: List<PointF>): List<PointF> {
+    if (previous == null || previous.size != current.size) return current
+    val jump = previous.zip(current).maxOf { (a, b) -> hypot(a.x - b.x, a.y - b.y) }
+    // Snap immediately when the document moves to a completely new region.
+    if (jump > 0.22f) return current
+    return previous.zip(current).map { (a, b) ->
+        PointF(
+            a.x + (b.x - a.x) * SMOOTHING_ALPHA,
+            a.y + (b.y - a.y) * SMOOTHING_ALPHA,
+        )
     }
 }
 

@@ -42,9 +42,11 @@
     <string name="camera_permission_summary">Grant camera permission to detect and scan documents.</string>
     <string name="camera_permission_grant">Grant access</string>
     <string name="camera_status_ready">Document ready</string>
+    <string name="camera_status_detecting">Hold steady…</string>
     <string name="camera_status_auto">Auto capture</string>
     <string name="camera_status_manual">Manual capture</string>
-    <string name="camera_hint_ready">Hold steady — capture is ready</string>
+    <string name="camera_hint_ready">Capturing document…</string>
+    <string name="camera_hint_holding">Document found — hold steady to capture</string>
     <string name="camera_hint_auto_capture">Fit the page inside the frame</string>
     <string name="camera_hint_auto_detect">Auto crop is on — tap to capture</string>
     <string name="camera_hint_manual">Tap the shutter to capture</string>
