@@ -35,7 +35,7 @@ class ScanViewModel : ViewModel() {
     var autoCapture by mutableStateOf(true); private set
     var colorMode by mutableStateOf(ColorSchemeMode.System); private set
     var materialBlurEnabled by mutableStateOf(true); private set
-    @StringRes
+    @get:StringRes
     var pendingSnackbarRes by mutableStateOf<Int?>(null); private set
 
     var captured by mutableStateOf<Bitmap?>(null); private set
